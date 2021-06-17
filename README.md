@@ -4,6 +4,8 @@ NanoLexer is a library that generates lexers in C++. On the contrary to lexer ge
 
 It is aldready functionnal and usable even though developments are not complete and first version still not published (and not planned).
 
+To play with it please have a look at the `testgen` subfolder which contains a variety of use cases. Some of them wil be presented below as examples.
+
 # Requirements
 * C++ 17 compliant compiler (successfuly tested only with Microsoft C++ 2019 compiler as of now)
 * cmake
@@ -183,8 +185,6 @@ Here is another example that illustrate the use of a context to match C multilin
 		// [...]
 ```
 
-To play with it please have a look at the tests subfolder which contains a variety of use cases. All examples presented above can be found in the `testgen` subfolder.
-
 # Patterns
 Supported patterns are:
 <pre>
@@ -221,8 +221,8 @@ a|b                         alternative, either an ‘a’ or a ‘b’.
 </pre>
 # Future developments
 Main areas of improvments are:
+- additional unit tests/bug fixes
 - documentation
-- additional unit tests
 - make it compliant with compilers gcc and clang
 - source code generation
 - refactoring of some old code
