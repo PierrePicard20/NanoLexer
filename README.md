@@ -2,7 +2,7 @@
 # NanoLexer
 NanoLexer is a library that generates lexers in C++. On the contrary to lexer generators of the lex's familly (which are great!) it does not generate an automaton in the form of a matrix but generates an algorithm instead. Nevertheless the underlying algorithm is based on the same principles (construction of a DFA). The code generated is straightforward, small, efficient and human readable as much as possible. The primary goal is the lexing of programming languages but not limited to.
 
-It is aldready functionnal and usable even though developments are not complete and first version still not published.
+It is aldready functionnal and usable even though developments are not complete and first version still not published (and not planned).
 
 # Requirements
 * C++ 17 compliant compiler (successfuly tested only with Microsoft C++ 2019 compiler as of now)
@@ -100,7 +100,7 @@ Let's take a lexer specification for arithmetic expressions as an example:
 ```
 
 # Contexts
-NanoLexer supports contexts of analysis that can be pushed and poped. This allows to extend the pattern's power of expression and is required to match symetric patterns that are common in programming languages, like strings and comments.
+NanoLexer supports contexts of analysis that can be pushed and poped. This allows to extend the pattern's power of expression which is required to match symetric patterns that are common in programming languages, like strings and comments.
 
 Here is another example that illustrate the use of a context to match C multiline comments:
 ```C++
@@ -183,7 +183,7 @@ Here is another example that illustrate the use of a context to match C multilin
 		// [...]
 ```
 
-To play with it please have a look at the tests subfolder which contains a variety of use cases. 
+To play with it please have a look at the tests subfolder which contains a variety of use cases. All examples presented above can be found in the `testgen` subfolder.
 
 # Patterns
 Supported patterns are:
@@ -228,6 +228,3 @@ Main areas of improvments are:
 - refactoring of some old code
 - additional regular expression patterns
 - support of multi byte characters
-
-# License
-Available under license GPL only.
