@@ -2,9 +2,6 @@
 
 project(tests)
 
-include_directories(${gtest_SOURCE_DIR}
-					${gtest_SOURCE_DIR}/include)
-	
 set (CMAKE_INCLUDE_CURRENT_DIR ON)
 
 set (SRCS
@@ -37,10 +34,8 @@ set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/CppLexer.h
 							PROPERTIES GENERATED TRUE
 							)
 
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-
 add_executable(tests ${SRCS} ${HEADERS})
-target_link_libraries(tests NanoLexer gtest_main)
+target_link_libraries(tests NanoLexer GTest::gtest_main)
 add_test(NAME tests
 		 COMMAND $<TARGET_FILE:tests>
 		 WORKING_DIRECTORY ${PROJECT_BINARY_DIR})

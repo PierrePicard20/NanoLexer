@@ -1,230 +1,328 @@
 
 # NanoLexer
-NanoLexer is a library that generates lexers in C++. On the contrary to lexer generators of the lex's familly (which are great!) it does not generate an automaton in the form of a matrix but generates an algorithm instead. Nevertheless the underlying algorithm is based on the same principles (construction of a DFA). The code generated is straightforward, small, efficient and human readable as much as possible. The primary goal is the lexing of programming languages but not limited to.
 
-It is aldready functionnal and usable even though developments are not complete and first version still not published (and not planned).
+NanoLexer is a library that generates lexers in C++. The code generated is straightforward, small, efficient and human readable as much as possible. The primary goal is the lexing of programming languages but not limited to.
 
-To play with it please have a look at the `testgen` subfolder which contains a variety of use cases. Some of them wil be presented below as examples.
+It is already functional and usable even though developments are not complete and the first version is still not published (and not planned).
 
-# Requirements
-* C++ 17 compliant compiler (successfuly tested only with Microsoft C++ 2019 compiler as of now)
-* cmake
-* flex
-* bison
+## How it works
 
-# Examples
-Let's take a lexer specification for arithmetic expressions as an example:
-```C++
-    try
-    {
-        LexerGenerator lexGen("Arithmetic");
+NanoLexer follows a two-step workflow:
 
-        lexGen.addMacro("Digit", "[0-9]");
-        lexGen.addMacro("NonNulDigit", "[1-9]");
-        lexGen.addMacro("Integer", "{Digit}+");
-        lexGen.addMacro("Float", "{Integer}\\.{Digit}+");
+```
+1. Define tokens with a LexerGenerator instance
+          ↓
+   generateFiles()
+          ↓
+2. Generated header (e.g. ArithmeticLexer.h)
+          ↓
+   Instantiate & use in your application
+```
 
-        lexGen.addExpression("[a-zA-Z]+", "id");
-        lexGen.addExpression("{Integer}|{Float}", "number");
-        lexGen.addVerbatimExpression("+", "op_plus");
-        lexGen.addVerbatimExpression("-", "op_minus");
-        lexGen.addVerbatimExpression("*", "op_mult");
-        lexGen.addVerbatimExpression("/", "op_div");
-        lexGen.addVerbatimExpression("(", "open_parenthesis");
-        lexGen.addVerbatimExpression(")", "close_parenthesis");
-        lexGen.addExpression("[ \t]+", "whitespace");
+Step 1 is a small standalone program (or build step) that you write once. Step 2 is a header-only template class that you include directly — no additional library needed at that point.
 
-        lexGen.generateLexer();
-        lexGen.generateFiles("cpp", outputPath);
-    }
-    catch (const NanoLexerException& e)
-    {
-        for (const auto& msg : e.getMessages())
-            std::cout << msg << std::endl;
-        exit(1);
-    }
+To get started, have a look at the `testgen` subfolder which contains a variety of use cases, and at the `example/` directory for a minimal standalone project using NanoLexer as an external CMake dependency.
+
+---
+
+## Requirements
+
+- C++17 compliant compiler (successfully tested with MSVC 2019; GCC/Clang support planned)
+- CMake ≥ 3.8
+- Flex
+- Bison
+- GoogleTest — only required when building tests (`PACKAGE_TESTS=ON`)
+
+When an environment variable VCPKG_ROOT is defined and refers to the path of vcpkg, if the variable USE_VCPKG is true, GoogleTest is searched as a package installed with vcpkg.
+
+On Windows you may use gnuwin32 [bison](https://gnuwin32.sourceforge.net/packages/bison.htm) and [flex](https://gnuwin32.sourceforge.net/packages/flex.htm) packages.
+
+---
+
+## Build & Install
+
+```bash
+cmake -B build -DCMAKE_INSTALL_PREFIX=/path/to/install
+cmake --build build --config release
+cmake --install build
+```
+
+To also build the tests:
+
+```bash
+cmake -B build -DUSE_VCPKG=ON -DPACKAGE_TESTS=ON -DCMAKE_INSTALL_PREFIX=/path/to/install
+cmake --build build
+ctest --test-dir build
+```
+
+### Integrating into your CMake project
+
+After installation, use `find_package` in your `CMakeLists.txt`:
+
+```cmake
+find_package(NanoLexer REQUIRED)
+target_link_libraries(my_target PRIVATE NanoLexer::NanoLexer)
+```
+
+---
+
+## Examples
+
+### Arithmetic expression lexer
+
+```cpp
+try
+{
+    LexerGenerator lexGen("Arithmetic");
+
+    lexGen.addMacro("[0-9]",                "Digit");
+    lexGen.addMacro("{Digit}+",             "Integer");
+    lexGen.addMacro("{Integer}\\.{Digit}+", "Float");
+
+    lexGen.addExpression("[a-zA-Z]+",    "id");
+    lexGen.addExpression("{Integer}|{Float}", "number");
+    lexGen.addVerbatimExpression("+", "op_plus");
+    lexGen.addVerbatimExpression("-", "op_minus");
+    lexGen.addVerbatimExpression("*", "op_mult");
+    lexGen.addVerbatimExpression("/", "op_div");
+    lexGen.addVerbatimExpression("(", "open_parenthesis");
+    lexGen.addVerbatimExpression(")", "close_parenthesis");
+    lexGen.addExpression("[ \t]+", "whitespace");
+
+    lexGen.generateLexer();
+    lexGen.generateFiles("cpp", outputPath);  // outputPath: destination directory
+}
+catch (const NanoLexerException& e)
+{
+    for (const auto& msg : e.getMessages())
+        std::cout << msg << std::endl;
+    exit(1);
+}
 ```
 
 ... generates the following core automaton algorithm:
-```C++
-		// [...]
-        bool main_context(){
-            int c = get(); if (c==Traits::eof()) goto eof;
-            switch (c){
-            case ')': accept((Lexeme)8); return true;
-            case '(': accept((Lexeme)7); return true;
-            case '/': accept((Lexeme)6); return true;
-            case '*': accept((Lexeme)5); return true;
-            case '-': accept((Lexeme)4); return true;
-            case '+': accept((Lexeme)3); return true;
-            default:
-                if ((c>='A'&&c<='Z')||(c>='a'&&c<='z')) goto state7;
-                if ((c>='0'&&c<='9')) goto state8;
-                if ((c=='\t')||(c==' ')) goto state9;
-            }
-            return (accepted!=Lexeme::unknown_);
-        state7:
-            accept((Lexeme)1);
-            c = get(); if (c==Traits::eof()) goto eof;
+
+```cpp
+    // [...]
+    bool main_context(){
+        int c = get(); if (c==Traits::eof()) goto eof;
+        switch (c){
+        case ')': accept((Lexeme)8); return true;
+        case '(': accept((Lexeme)7); return true;
+        case '/': accept((Lexeme)6); return true;
+        case '*': accept((Lexeme)5); return true;
+        case '-': accept((Lexeme)4); return true;
+        case '+': accept((Lexeme)3); return true;
+        default:
             if ((c>='A'&&c<='Z')||(c>='a'&&c<='z')) goto state7;
-            unget(); return true;
-        state8:
-            accept((Lexeme)2);
-            c = get(); if (c==Traits::eof()) goto eof;
-            switch (c){
-            case '.': goto state10;
-            default:
-                if ((c>='0'&&c<='9')) goto state8;
-            }
-            unget(); return true;
-        state9:
-            accept((Lexeme)9);
-            c = get(); if (c==Traits::eof()) goto eof;
+            if ((c>='0'&&c<='9')) goto state8;
             if ((c=='\t')||(c==' ')) goto state9;
-            unget(); return true;
-        state10:
-            c = get(); if (c==Traits::eof()) goto eof;
-            if ((c>='0'&&c<='9')) goto state11;
-            return (accepted!=Lexeme::unknown_);
-        state11:
-            accept((Lexeme)2);
-            c = get(); if (c==Traits::eof()) goto eof;
-            if ((c>='0'&&c<='9')) goto state11;
-            unget(); return true;
-        eof:
-            if (nbRead==0){
-                accept(Lexeme::eof_);
-                return true;
-            }
-            return (accepted!=Lexeme::unknown_);
         }
-		// [...]
+        return (accepted!=Lexeme::unknown_);
+    state7:
+        accept((Lexeme)1);
+        c = get(); if (c==Traits::eof()) goto eof;
+        if ((c>='A'&&c<='Z')||(c>='a'&&c<='z')) goto state7;
+        unget(); return true;
+    state8:
+        accept((Lexeme)2);
+        c = get(); if (c==Traits::eof()) goto eof;
+        switch (c){
+        case '.': goto state10;
+        default:
+            if ((c>='0'&&c<='9')) goto state8;
+        }
+        unget(); return true;
+    state9:
+        accept((Lexeme)9);
+        c = get(); if (c==Traits::eof()) goto eof;
+        if ((c=='\t')||(c==' ')) goto state9;
+        unget(); return true;
+    state10:
+        c = get(); if (c==Traits::eof()) goto eof;
+        if ((c>='0'&&c<='9')) goto state11;
+        return (accepted!=Lexeme::unknown_);
+    state11:
+        accept((Lexeme)2);
+        c = get(); if (c==Traits::eof()) goto eof;
+        if ((c>='0'&&c<='9')) goto state11;
+        unget(); return true;
+    eof:
+        if (nbRead==0){
+            accept(Lexeme::eof_);
+            return true;
+        }
+        return (accepted!=Lexeme::unknown_);
+    }
+    // [...]
 ```
 
-# Contexts
-NanoLexer supports contexts of analysis that can be pushed and poped. This allows to extend the pattern's power of expression which is required to match symetric patterns that are common in programming languages, like strings and comments.
+### Using the generated lexer
 
-Here is another example that illustrate the use of a context to match C multiline comments:
-```C++
-    try
+Once `ArithmeticLexer.h` is generated, include it directly — no library linkage required:
+
+```cpp
+#include "ArithmeticLexer.h"
+#include <sstream>
+#include <iostream>
+
+using ArithmeticLexeme = NanoLexer::ArithmeticLexer<std::istringstream>::Lexeme;
+
+int main()
+{
+    std::istringstream input("3.14 + 2 * (x - 1)");
+    NanoLexer::ArithmeticLexer<std::istringstream> lexer(input);
+
+    ArithmeticLexeme tok;
+    while ((tok = lexer.getNextToken()) != ArithmeticLexeme::eof_)
     {
-        LexerGenerator lexGen("Comments");
-
-        // by default, without having declared a new context, any new expression is added to the main context
-        lexGen.addExpression("multilineComment", "/\\*")        // when the begining of a multiline C comment is matched, the context 'Comment' is pushed.
-            ->setAction(LexerGenerator::ActionOnMatch::push)
-            ->setPushContext("Comment");
-
-        // after the declaration of a new context (with the method newContext() below), any new expression is added to that context
-        lexGen.newContext("Comment");                           // context 'Comment' specificaly match the end of a multiline C comment
-        lexGen.addExpression("comment1", "[^\\*]+");            // match any character but '*'
-        lexGen.addExpression("comment2", "\\*[^\\/]");          // match '*' followed by any character but '/'
-        lexGen.addExpression("comment3", "\\*\\/")              // match the closing pattern of the comment => pop the context and return to the main one
-            ->setAction(LexerGenerator::ActionOnMatch::pop);
-
-        lexGen.generateLexer();
-        lexGen.generateFiles("cpp", outputPath);
+        if (tok != ArithmeticLexeme::whitespace_)
+            std::cout << lexer.getLexemeName(tok) << " : \""
+                      << lexer.getMatchString() << "\"\n";
     }
-    catch (const NanoLexerException& e)
-    {
-        std::cout << e.getMessage() << std::endl;
-        exit(1);
-    }
+}
+```
+
+---
+
+## Contexts
+
+NanoLexer supports contexts that can be pushed and popped. This extends the expressive power of patterns, which is required to match symmetric constructs common in programming languages, such as strings and multiline comments.
+
+Here is an example that illustrates the use of a context to match C multiline comments:
+
+```cpp
+try
+{
+    LexerGenerator lexGen("Comments");
+
+    // Without a newContext() call, expressions are added to the main context.
+    lexGen.addExpression("/\\*", "multilineComment")  // match the opening '/*'
+        ->setPushContext("Comment");                  // push the 'Comment' context
+
+    // After newContext(), expressions are added to that context.
+    lexGen.newContext("Comment");
+    lexGen.addExpression("[^\\*]+",  "comment1");     // any character but '*'
+    lexGen.addExpression("\\*[^\\/]","comment2");     // '*' not followed by '/'
+    lexGen.addExpression("\\*\\/",  "comment3")       // closing '*/' => pop context
+        ->setPopAction();
+
+    lexGen.generateLexer();
+    lexGen.generateFiles("cpp", outputPath);
+}
+catch (const NanoLexerException& e)
+{
+    for (const auto& msg : e.getMessages())
+        std::cout << msg << std::endl;
+    exit(1);
+}
 ```
 
 ... which generates:
-```C++
-		// [...]
-        bool main_context(){
-            int c = get(); if (c==Traits::eof()) goto eof;
-            switch (c){
-            case '/': goto state1;
-            }
-            if (accepted!=Lexeme::unknown_) return true; goto fail;
-        state1:
-            c = get(); if (c==Traits::eof()) goto eof;
-            switch (c){
-            case '*': if (Comment()){ accept((Lexeme)1); return true;}else{if (accepted!=Lexeme::unknown_) return true; goto fail;}
-            }
-            if (accepted!=Lexeme::unknown_) return true; goto fail;
-        eof:
-            if (nbRead==0){
-                accept(Lexeme::eof_);
-                return true;
-            }
-            if (accepted!=Lexeme::unknown_)
-                return true;
-        fail:
-            return false;
-        }
 
-        bool Comment(){
-            int c = get(); if (c==Traits::eof()) goto fail;
-        state0_noread:
-            switch (c){
-            case '*': goto state1;
-            default:
-                goto state2;
-            }
-            goto fail;
-        state1:
-            c = get(); if (c==Traits::eof()) goto fail;
-            switch (c){
-            case '/': return true;
-            default:
-                {goto state0_noread;}
-            }
-            goto fail;
-        state2:
-            c = get(); if (c==Traits::eof()) goto fail;
-            if (!((c=='*'))) goto state2;
-            goto state0_noread;
-        fail:
-            return false;
+```cpp
+    // [...]
+    bool main_context(){
+        int c = get(); if (c==Traits::eof()) goto eof;
+        switch (c){
+        case '/': goto state1;
         }
-		// [...]
+        if (accepted!=Lexeme::unknown_) return true; goto fail;
+    state1:
+        c = get(); if (c==Traits::eof()) goto eof;
+        switch (c){
+        case '*': if (Comment()){ accept((Lexeme)1); return true;}else{if (accepted!=Lexeme::unknown_) return true; goto fail;}
+        }
+        if (accepted!=Lexeme::unknown_) return true; goto fail;
+    eof:
+        if (nbRead==0){
+            accept(Lexeme::eof_);
+            return true;
+        }
+        if (accepted!=Lexeme::unknown_)
+            return true;
+    fail:
+        return false;
+    }
+
+    bool Comment(){
+        int c = get(); if (c==Traits::eof()) goto fail;
+    state0_noread:
+        switch (c){
+        case '*': goto state1;
+        default:
+            goto state2;
+        }
+        goto fail;
+    state1:
+        c = get(); if (c==Traits::eof()) goto fail;
+        switch (c){
+        case '/': return true;
+        default:
+            {goto state0_noread;}
+        }
+        goto fail;
+    state2:
+        c = get(); if (c==Traits::eof()) goto fail;
+        if (!((c=='*'))) goto state2;
+        goto state0_noread;
+    fail:
+        return false;
+    }
+    // [...]
 ```
 
-# Patterns
-Supported patterns are:
-<pre>
-x                           match the character ’x’
-.                           any character (byte) except newline
-[xyz]                       either an ’x’, a ’y’, or a ’z’
-[abj-oZ]                    either an ’a’, a ’b’, any letter from ’j’through ’o’, or a ’Z’
-[^A-Z]                      any character but those in the internval A-Z.
-[^A-Z\n]                    any character EXCEPT an uppercase letter or a newline
-x*                          zero or more x’s, where x is any regular expression
-x+                          one or more x’s
-x?                          zero or one x’s (that is, “an optional x”)
-x{2,5}                      anywhere from two to five x’s
-x{2,}                       two or more x’s
-x{4}                        exactly 4 x’s
-{name}                      the expansion of the macro ‘name’
-\X                          if X is ‘a’, ‘b’, ‘f’, ‘n’, ‘r’, ‘t’, or ‘v’, then the ANSI-C interpretation of ‘\x’.Otherwise, a literal ‘X’ (used to escape operators such as ‘*’)
-\0                          null character (ASCII code 0)
-\267                        the character with octal value 267
-\x3d                        the character with hexadecimal value 3d
-(r)                         match the expression ‘r’
-ab                          concatenation, the regular expression ‘a’ followed by the regular expression ‘b'.
-a|b                         alternative, either an ‘a’ or a ‘b’.
-[:alpha:]                   Alphabetic characters, union of [:lower:] and [:upper:]. In the ‘C’ locale and ASCII character encoding, this is the same as [A-Za-z].
-[:blank:]                   Blank characters: space and tab.
-[:digit:]                   Digits, equivalent to [0-9].
-[:xdigit:]                  Hexadecimal digits, equivalent to [0-9A-Fa-f].
-[:lower:]                   Lower-case letters, equivalent to [a-z] in the ‘C’ locale and ASCII character encoding.
-[:upper:]                   Upper-case letters, equivalent to [A-Z] in the ‘C’ locale and ASCII character encoding.
-[:print:]                   Printable characters: ‘[:alnum:]’, ‘[:punct:]’, and space.
-[:punct:]                   Punctuation characters; in the ‘C’ locale and ASCII character encoding, this is ! " # $ % & ' ( ) * + , - . / : ; < = > ? @ [ \ ] ^ _ ` { | } ~.
-[:cntrl:]                   Control characters. In ASCII, these characters have octal codes 000 through 037, and 177 (DEL). In other character sets, these are the equivalent characters, if any.
-[:graph:]                   Graphical characters: ‘[:alnum:]’ and ‘[:punct:]’.
-</pre>
-# Future developments
-Main areas of improvments are:
-- additional unit tests/bug fixes
-- documentation
-- make it compliant with compilers gcc and clang
-- source code generation
-- refactoring of some old code
-- additional regular expression patterns
-- support of multi byte characters
+---
+
+## Supported patterns
+
+| Pattern         | Description |
+|-----------------|-------------|
+| `x`             | Match the character `x` |
+| `.`             | Any character (byte) except newline |
+| `[xyz]`         | Either `x`, `y`, or `z` |
+| `[abj-oZ]`      | Either `a`, `b`, any letter from `j` through `o`, or `Z` |
+| `[^A-Z]`        | Any character except those in the interval `A-Z` |
+| `[^A-Z\n]`      | Any character except an uppercase letter or a newline |
+| `x*`            | Zero or more `x`'s |
+| `x+`            | One or more `x`'s |
+| `x?`            | Zero or one `x` (optional) |
+| `x{2,5}`        | Between two and five `x`'s |
+| `x{2,}`         | Two or more `x`'s |
+| `x{4}`          | Exactly four `x`'s |
+| `{name}`        | Expansion of the macro `name` |
+| `\X`            | If `X` is `a b f n r t v`: ANSI-C escape. Otherwise: literal `X` (used to escape operators such as `*`) |
+| `\0`            | Null character (ASCII 0) |
+| `\267`          | Character with octal value 267 |
+| `\x3d`          | Character with hexadecimal value `3d` |
+| `(r)`           | Match the expression `r` |
+| `ab`            | Concatenation: `a` followed by `b` |
+| `a\|b`          | Alternative: either `a` or `b` |
+| `[:alpha:]`     | Alphabetic characters (`[A-Za-z]` in C/ASCII locale) |
+| `[:blank:]`     | Blank characters: space and tab |
+| `[:digit:]`     | Digits, equivalent to `[0-9]` |
+| `[:xdigit:]`    | Hexadecimal digits, equivalent to `[0-9A-Fa-f]` |
+| `[:lower:]`     | Lower-case letters, equivalent to `[a-z]` |
+| `[:upper:]`     | Upper-case letters, equivalent to `[A-Z]` |
+| `[:print:]`     | Printable characters: `[:alnum:]`, `[:punct:]`, and space |
+| `[:punct:]`     | Punctuation characters |
+| `[:cntrl:]`     | Control characters (octal 000–037 and 177 in ASCII) |
+| `[:graph:]`     | Graphical characters: `[:alnum:]` and `[:punct:]` |
+
+---
+
+## Future developments
+
+- Additional unit tests and bug fixes
+- Documentation
+- GCC and Clang support
+- Source code generation improvements
+- Refactoring of legacy code
+- Additional regular expression patterns
+- Multi-byte character support
+
+---
+
+## License
+
+*To be defined.*

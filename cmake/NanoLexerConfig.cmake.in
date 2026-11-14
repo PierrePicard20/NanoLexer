@@ -1,0 +1,7 @@
+@PACKAGE_INIT@
+
+set_and_check(NanoLexer_LEXER_SK_DIR "@PACKAGE_CMAKE_INSTALL_DATADIR@/NanoLexer/lexer_sk")
+
+include("${CMAKE_CURRENT_LIST_DIR}/NanoLexerTargets.cmake")
+
+check_required_components(NanoLexer)

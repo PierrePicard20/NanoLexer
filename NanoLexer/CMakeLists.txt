@@ -60,3 +60,21 @@ add_library(NanoLexer STATIC ${SRCS} ${HEADERS} NanoLexer.y NanoLexer.l ../READM
 set(EXECUTABLE_OUTPUT_PATH bin/${CMAKE_BUILD_TYPE})
 
 target_compile_features(NanoLexer PRIVATE cxx_std_17)
+
+target_include_directories(NanoLexer
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:include>
+    PRIVATE
+        ${CMAKE_CURRENT_BINARY_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+include(GNUInstallDirs)
+
+install(TARGETS NanoLexer
+    EXPORT NanoLexerTargets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
