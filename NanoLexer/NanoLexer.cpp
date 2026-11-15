@@ -429,8 +429,12 @@ namespace NanoLexer
 	{
 		std::ofstream myfile;
 		myfile.open(file.string());
+		if (!myfile)
+			throw NanoLexerException("Cannot open file for writing: " + file.string());
 		myfile << str;
 		myfile.close();
+		if (!myfile)
+			throw NanoLexerException("Error while writing file: " + file.string());
 	}
 
 	void LexerGenerator::generateFiles(const std::string& language, const std::string& outputPath)
@@ -441,19 +445,18 @@ namespace NanoLexer
 
 		lexer_sk = lexer_sk / "lexer_sk";
 		if (!std::filesystem::is_directory(lexer_sk))
-		{
-			std::cout << "Bad install, missing directory lexer_sk " << lexer_sk.string() << std::endl;
-			return;
-		}
+			throw NanoLexerException("Bad install, missing directory lexer_sk " + lexer_sk.string());
 
 		auto cpp = lexer_sk / language;
 		if (!std::filesystem::is_directory(cpp))
-		{
-			std::cout << "Missing directory lexer_sk/" << language << std::endl;
-			return;
-		}
+			throw NanoLexerException("Missing directory lexer_sk/" + language);
 
-		std::string line;
+		auto outputDir = exePath / outputPath;
+		std::error_code ec;
+		std::filesystem::create_directories(outputDir, ec);
+		if (ec)
+			throw NanoLexerException("Cannot create output directory " + outputDir.string() + ": " + ec.message());
+
 		for (auto& file : std::filesystem::directory_iterator(cpp))
 		{
 			auto str = readFile(file.path());
@@ -467,8 +470,7 @@ namespace NanoLexer
 			}
 
 			auto filename = lexerName + file.path().filename().string();
-			auto myPath = exePath / outputPath / filename;
-			writeFile(myPath, str);
+			writeFile(outputDir / filename, str);
 		}
 		std::cout << "Lexer " << lexerName << " generated." << std::endl;
 	}

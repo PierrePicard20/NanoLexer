@@ -1,5 +1,5 @@
 #include <gtest\gtest.h>
-#include <Cpplexer.h>
+#include <CppLexer.h>
 #include "checkLexemes.h"
 
 using namespace NanoLexer;

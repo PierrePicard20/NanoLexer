@@ -21,8 +21,8 @@ add_executable(testgen ${SRCS} ${HEADERS})
 set(EXECUTABLE_OUTPUT_PATH bin/${CMAKE_BUILD_TYPE})
 
 target_link_libraries(testgen NanoLexer)
+target_compile_features(testgen PRIVATE cxx_std_17)
 
 add_custom_command(TARGET testgen POST_BUILD
                    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/lexer_sk $<TARGET_FILE_DIR:testgen>/lexer_sk)
-add_custom_command(TARGET testgen POST_BUILD
-                   COMMAND testgen)
+# testgen itself is run by tests/CMakeLists.txt to generate the lexers used by the tests

@@ -5,7 +5,7 @@
 
 using namespace NanoLexer;
 
-extern const char* outputPath;
+extern std::string outputPath;
 
 void genSimpleLexer1();
 void genArithmeticExpressionLexer();

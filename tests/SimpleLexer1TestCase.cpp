@@ -1,5 +1,5 @@
 #include <gtest\gtest.h>
-#include <Simple1lexer.h>
+#include <Simple1Lexer.h>
 #include "checkLexemes.h"
 
 using namespace NanoLexer;

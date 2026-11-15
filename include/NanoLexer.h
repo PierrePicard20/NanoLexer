@@ -80,7 +80,9 @@ namespace NanoLexer
 
 		// Generates the source files of the lexer. 
 		// 'language' must be a subdirectory of directory 'lexer_sk'.
-		// 'outputPath' is a relative path to the current path that will contain the generated sources.
+		// 'outputPath' is the directory that will contain the generated sources (created if needed): either absolute,
+		// or relative to the directory of the running executable.
+		// Throws NanoLexerException if the skeleton files cannot be found or the output cannot be written.
 		void generateFiles(const std::string& language, const std::string& outputPath);
 
 		std::string getDebugString();
