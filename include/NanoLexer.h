@@ -103,7 +103,7 @@ namespace NanoLexer
 		// Replace the placeholder $(OnCreate) in the skeleton file.
 		void addOnCreate(const std::string& code);
 
-		// Add initialization statements in the method getNextToken() of the generated lexer class.
+		// Add initialization statements in the method lex() of the generated lexer class, before each lexeme is matched.
 		// Replace the placeholder $(OnStartNextToken) in the skeleton file.
 		void addOnStartNextToken(const std::string& code);
 

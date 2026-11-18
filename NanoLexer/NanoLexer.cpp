@@ -323,8 +323,8 @@ namespace NanoLexer
 
 				if (!expr.second.matchCode.empty() && isMainContext)
 				{
-					onMatch << "			case Lexeme::" << expr.second.getName() << "_:" << std::endl;
-					onMatch << "				{" << expr.second.matchCode << " break;}" << std::endl;
+					onMatch << "                case Lexeme::" << expr.second.getName() << "_:" << std::endl;
+					onMatch << "                    {" << expr.second.matchCode << " return accepted;}" << std::endl;
 				}
 				if (isMainContext)
 				{
@@ -359,8 +359,8 @@ namespace NanoLexer
 			debugString += context->getDebugString(popIds);
 			lexemeCount += context->getLexemeCount();
 		}
-		onMatch << "			default:" << std::endl;
-		onMatch << "				{" << defaultOnMatch << "}" << std::endl;
+		onMatch << "                default:" << std::endl;
+		onMatch << "                    {" << defaultOnMatch << " return accepted;}" << std::endl;
 
 		std::map<int, std::string>	id2OnMatchCode;
 		id = 1;

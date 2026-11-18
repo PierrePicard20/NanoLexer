@@ -15,7 +15,7 @@ void checkLexemes(const std::string& str, const std::vector<Token<Lexeme>>& lexe
 
     int count = 0;
     Lexeme  lex;
-    while ((lex = lexer.getNextToken()) != Lexeme::eof_)
+    while ((lex = lexer.lex()) != Lexeme::eof_)
     {
         ASSERT_FALSE(lexemes.size() <= count);  // Found more lexemes than expected
         ASSERT_EQ(lexemes[count].lex, lex);

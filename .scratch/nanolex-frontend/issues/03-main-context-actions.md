@@ -12,3 +12,7 @@ See spec: `.scratch/nanolex-frontend/spec.md` (Description-file lexical rules, G
 - [ ] An unterminated action is reported as a located error
 - [ ] End to end: a `.nl` lexer whose whitespace rule has a non-returning action never reports whitespace lexemes (`checkLexemes`)
 - [ ] End to end: an action-less rule runs `%default`; with no `%default`, it returns its lexeme
+
+## Comments
+
+From ticket 01: the generator currently appends `return accepted;` to main-context action cases and to an explicit default action (in `LexerGenerator::generateLexer`, `NanoLexer/NanoLexer.cpp`). Remove it here, and add `return accepted;` to the non-returning actions in `testgen/cMultilineCommentLexer.cpp` so the existing tests keep their token sequences.

@@ -79,7 +79,7 @@ int main()
 
     using Lexeme = NanoLexer::ArithmeticLexer<std::istringstream>::Lexeme;
     Lexeme tok;
-    while ((tok = lexer.getNextToken()) != Lexeme::eof_)
+    while ((tok = lexer.lex()) != Lexeme::eof_)
     {
         if (tok != Lexeme::whitespace_)
             std::cout << lexer.getLexemeName(tok) << " : \""

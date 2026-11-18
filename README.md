@@ -174,7 +174,7 @@ int main()
     NanoLexer::ArithmeticLexer<std::istringstream> lexer(input);
 
     ArithmeticLexeme tok;
-    while ((tok = lexer.getNextToken()) != ArithmeticLexeme::eof_)
+    while ((tok = lexer.lex()) != ArithmeticLexeme::eof_)
     {
         if (tok != ArithmeticLexeme::whitespace_)
             std::cout << lexer.getLexemeName(tok) << " : \""

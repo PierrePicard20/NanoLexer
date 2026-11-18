@@ -37,32 +37,38 @@ $(OnCreate)
 		inline Lexeme getAcceptedLexeme() const {return accepted;}
 		inline int getMatchLength() const {return nbRead;}
 
-        Lexeme getNextToken()
+        Lexeme lex()
         {
-$(OnStartNextToken)
-            matchString = "";
-            accepted = Lexeme::unknown_;
             while (true)
             {
-                nbRead = 0;
-                nbReadAfterAccept = 0;
-                main_context();
-                if (accepted != Lexeme::unknown_)
+$(OnStartNextToken)
+                matchString = "";
+                accepted = Lexeme::unknown_;
+                do
                 {
-                    while (nbReadAfterAccept)
+                    nbRead = 0;
+                    nbReadAfterAccept = 0;
+                    main_context();
+                } while (accepted == Lexeme::unknown_);
+                while (nbReadAfterAccept)
+                {
+                    unget();
+                }
+                if (matchString.size() > nbRead)
+                {
+                    while (nbRead)
                     {
                         unget();
                     }
-                    if (matchString.size() > nbRead)
-                    {
-                        while (nbRead)
-                        {
-                            unget();
-                        }
-                        return Lexeme::unknown_;
-                    }
-					onMatch();
-                    return accepted;
+                    accepted = Lexeme::unknown_;
+                }
+                switch (accepted)
+                {
+                case Lexeme::eof_:
+                    return Lexeme::eof_;
+                case Lexeme::unknown_:
+                    return Lexeme::unknown_;
+$(OnMatch)
                 }
             }
         }
@@ -133,14 +139,6 @@ $(LexerContextsMethods)
         std::string     matchString;
         Lexeme          accepted;
         int             nbRead;
-		
-		void onMatch()
-		{
-			switch (accepted)
-			{
-$(OnMatch)
-			}
-		}
         
         void accept(Lexeme l)
         {

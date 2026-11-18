@@ -16,7 +16,7 @@
 //   NanoLexer::ArithmeticLexer<std::istringstream> lexer(input);
 //
 //   NanoLexer::ArithmeticLexer<std::istringstream>::Lexeme tok;
-//   while ((tok = lexer.getNextToken()) != decltype(tok)::eof_)
+//   while ((tok = lexer.lex()) != decltype(tok)::eof_)
 //       std::cout << lexer.getLexemeName(tok) << " : " << lexer.getMatchString() << "\n";
 
 int main()
