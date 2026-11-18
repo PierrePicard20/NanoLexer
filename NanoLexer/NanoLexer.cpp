@@ -401,8 +401,8 @@ namespace NanoLexer
 		variables.emplace_back("$(ProtectedMembers)", protectedMembers);
 		variables.emplace_back("$(PrivateMembers)", privateMembers);
 		variables.emplace_back("$(OnCreate)", onCreate);
-		variables.emplace_back("$(OnStartNextToken)", onStartNextToken);
-		variables.emplace_back("$(OnMatch)", onMatch.str());
+		variables.emplace_back("$(OnStartLex)", onStartLex);
+		variables.emplace_back("$(LexCases)", onMatch.str());
 
 		variables.emplace_back("$(Declarations)", declarations);
 		variables.emplace_back("$(LexerContextsMethods)", source);
@@ -496,9 +496,9 @@ namespace NanoLexer
 	{
 		onCreate = code;
 	}
-	void LexerGenerator::addOnStartNextToken(const std::string& code)
+	void LexerGenerator::addOnStartLex(const std::string& code)
 	{
-		onStartNextToken = code;
+		onStartLex = code;
 	}
 	void LexerGenerator::addOnCurrentContextFailure(const std::string& code)
 	{

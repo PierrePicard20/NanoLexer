@@ -41,7 +41,7 @@ $(OnCreate)
         {
             while (true)
             {
-$(OnStartNextToken)
+$(OnStartLex)
                 matchString = "";
                 accepted = Lexeme::unknown_;
                 do
@@ -68,7 +68,7 @@ $(OnStartNextToken)
                     return Lexeme::eof_;
                 case Lexeme::unknown_:
                     return Lexeme::unknown_;
-$(OnMatch)
+$(LexCases)
                 }
             }
         }

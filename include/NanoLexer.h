@@ -104,8 +104,8 @@ namespace NanoLexer
 		void addOnCreate(const std::string& code);
 
 		// Add initialization statements in the method lex() of the generated lexer class, before each lexeme is matched.
-		// Replace the placeholder $(OnStartNextToken) in the skeleton file.
-		void addOnStartNextToken(const std::string& code);
+		// Replace the placeholder $(OnStartLex) in the skeleton file.
+		void addOnStartLex(const std::string& code);
 
 		// Add statements in the method handling the matching of current context expressions. These statements 
 		// are executed when no match was found.
@@ -129,7 +129,7 @@ namespace NanoLexer
 		std::string protectedMembers;
 		std::string privateMembers;
 		std::string onCreate;
-		std::string onStartNextToken;
+		std::string onStartLex;
 		std::string defaultOnMatch;
 		std::map<std::string, std::string> contextName2contextFailure;
 

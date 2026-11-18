@@ -9,7 +9,7 @@ void genCMultilineCommentLexer()
         auto actionOnNewLine = "line++; row = 1;";
         auto actionOnAllOtherLexeme = "row += getMatchLength()-nbCharToSubstract;";
 
-        lexGen.addOnStartNextToken("            nbCharToSubstract = 0;");
+        lexGen.addOnStartLex("                nbCharToSubstract = 0;");
         lexGen.addPrivateMembers("        int line,row,nbCharToSubstract;");      // add private fields to the lexer
         lexGen.addOnCreate("            line = 1; row = 1;");                       // initialize the fields in the lexer constructor
         lexGen.addPublicMembers(R"*(        inline int getCurrentLine() const {return line;}
