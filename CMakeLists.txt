@@ -10,6 +10,7 @@ project (NanoLexer VERSION 1.0.0)
 
 # Include sub-projects.
 add_subdirectory (NanoLexer)
+add_subdirectory (nanolex)
 
 option(PACKAGE_TESTS "Build the tests" OFF)
 if(PACKAGE_TESTS)

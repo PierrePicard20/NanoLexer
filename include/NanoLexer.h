@@ -87,6 +87,9 @@ namespace NanoLexer
 
 		std::string getDebugString();
 
+		// Name given to the constructor: the generated class is <name>Lexer.
+		inline const std::string& getLexerName() const { return lexerName; }
+
 		// Add public menbers in the generated lexer class.
 		// Replace the placeholder $(PublicMembers) in the skeleton file.
 		void addPublicMembers(const std::string& code);
