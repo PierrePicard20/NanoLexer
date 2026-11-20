@@ -52,6 +52,7 @@ set (NL_LEXERS
 	NlUserCode
 	NlTyped
 	NlTypedSkip
+	NlComments
 	)
 set (NL_HEADERS)
 foreach (lexer ${NL_LEXERS})

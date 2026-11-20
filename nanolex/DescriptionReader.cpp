@@ -27,6 +27,19 @@ namespace NanoLexer
 			std::string pattern;
 			bool hasAction;
 			std::string action;	// code between the braces of the action
+			std::string pushedContext;	// %push argument, empty without %push
+			bool pop;	// %pop
+		};
+
+		// The main context (first one, without name nor line) or a %context section.
+		struct Context
+		{
+			int line;
+			std::string name;
+			bool valid;	// false for a faulty %context declaration
+			std::vector<Rule> rules;
+			int unknownLine;
+			std::string unknownAction;	// <<UNKNOWN>> action, the failure code of a %context section
 		};
 
 		struct LocatedError
@@ -223,7 +236,8 @@ namespace NanoLexer
 		std::string lexerName = std::filesystem::path(fileName).stem().string();
 		int nameLine = 0;
 		std::vector<Macro> macros;
-		std::vector<Rule> rules;
+		std::vector<Context> contexts{ { 0, "", true, {}, 0, "" } };	// main context first
+		std::size_t current = 0;	// index of the context receiving the rules
 		std::string prologue;	// content of the %{ ... %} blocks
 		std::string userCode;
 		int defaultLine = 0;
@@ -232,8 +246,7 @@ namespace NanoLexer
 		std::string returnType;
 		int eofLine = 0;
 		std::string eofAction;
-		int unknownLine = 0;
-		std::string unknownAction;
+		std::size_t eofContext = 0;	// context of the <<EOF>> action, only allowed in the main context
 
 		// actions may span several lines: they are scanned in the whole text, its lines joined by '\n'
 		auto lines = splitLines(text);
@@ -339,7 +352,28 @@ namespace NanoLexer
 					}
 				}
 				else if (section == Section::rules && directive == "%default")
+				{
+					if (current)
+						errors.push_back({ number, "%default only allowed in the main context, not in %context '" + contexts[current].name + "'" });
 					readUniqueAction(index, directive.size(), directive, defaultLine, defaultAction);
+				}
+				else if (section == Section::rules && directive == "%context")
+				{
+					auto previous = std::find_if(contexts.begin(), contexts.end(), [&](const Context& c) { return c.valid && c.name == argument; });
+					bool valid = false;
+					if (argument.empty())
+						errors.push_back({ number, "%context expects a context name" });
+					else if (!isIdentifier(argument) || argument == "main_context")
+						errors.push_back({ number, "invalid context name '" + argument + "'" });
+					else if (previous != contexts.end())
+						errors.push_back({ number, "duplicate %context '" + argument + "', already declared at line " + std::to_string(previous->line) });
+					else
+						valid = true;
+					// even when invalid, the section receives the following rules, so that they are not checked as
+					// rules of the previous context
+					contexts.push_back({ number, argument, valid, {}, 0, "" });
+					current = contexts.size() - 1;
+				}
 				else if (section == Section::rules && directive == "%type")
 				{
 					if (typeLine)
@@ -368,25 +402,55 @@ namespace NanoLexer
 			{
 				auto end = patternEnd(line);
 				auto pattern = line.substr(0, end);
+				auto& context = contexts[current];
 				if (pattern == "<<EOF>>")
 				{
 					readUniqueAction(index, end, pattern, eofLine, eofAction);
+					if (eofLine == number)
+						eofContext = current;
 					continue;
 				}
 				if (pattern == "<<UNKNOWN>>")
 				{
-					readUniqueAction(index, end, pattern, unknownLine, unknownAction);
+					// one per context: unknown text of the main context, failure of a %context section
+					readUniqueAction(index, end, pattern, context.unknownLine, context.unknownAction);
 					continue;
 				}
+				Rule rule{ number, pattern, false, "", "", false };
 				auto restStart = line.find_first_not_of(" \t", end);
-				Rule rule{ number, line.substr(0, end), false, "" };
+				// optional context-stack command, between the pattern and the action
+				if (restStart != std::string::npos && line[restStart] == '%')
+				{
+					auto wordEnd = [&](std::size_t start) { return std::size_t(std::find_if(line.begin() + start, line.end(), isBlank) - line.begin()); };
+					auto commandEnd = wordEnd(restStart);
+					auto command = line.substr(restStart, commandEnd - restStart);
+					restStart = line.find_first_not_of(" \t", commandEnd);
+					if (command == "%pop")
+						rule.pop = true;
+					else if (command == "%push")
+					{
+						if (restStart == std::string::npos || line[restStart] == '{')
+						{
+							errors.push_back({ number, "%push expects a context name" });
+							continue;
+						}
+						auto nameEnd = wordEnd(restStart);
+						rule.pushedContext = line.substr(restStart, nameEnd - restStart);
+						restStart = line.find_first_not_of(" \t", nameEnd);
+					}
+					else
+					{
+						errors.push_back({ number, "unknown command '" + command + "', expected %push or %pop" });
+						continue;
+					}
+				}
 				if (restStart == std::string::npos)
-					rules.push_back(rule);
+					context.rules.push_back(rule);
 				else if (line[restStart] == '{')
 				{
 					rule.hasAction = readAction(index, restStart, rule.action);
 					if (rule.hasAction)
-						rules.push_back(rule);
+						context.rules.push_back(rule);
 				}
 				else
 					errors.push_back({ number, "unexpected text after the pattern: '" + trim(line.substr(end)) + "'" });
@@ -394,8 +458,26 @@ namespace NanoLexer
 		}
 		if (section == Section::definitions)
 			errors.push_back({ 0, "missing '%%' between the definitions and rules sections" });
-		else if (rules.empty() && errors.empty())
-			errors.push_back({ 0, "no rule in the rules section" });
+		else if (contexts[0].rules.empty() && errors.empty())
+			errors.push_back({ 0, (contexts.size() > 1) ? "no rule in the main context" : "no rule in the rules section" });
+		bool parsed = errors.empty();	// an empty context may come from a faulty rule
+		for (const auto& context : contexts)
+		{
+			bool isMain = !context.line;
+			if (!isMain && context.valid && context.rules.empty() && parsed)
+				errors.push_back({ context.line, "no rule in %context '" + context.name + "'" });
+			for (const auto& rule : context.rules)
+			{
+				if (rule.pop && isMain)
+					errors.push_back({ rule.line, "%pop not allowed in the main context" });
+				if (!rule.pushedContext.empty() && std::none_of(contexts.begin(), contexts.end(), [&](const Context& c) {
+						return c.line && c.valid && c.name == rule.pushedContext; }))
+					errors.push_back({ rule.line, "unknown context '" + rule.pushedContext + "' in %push" });
+				if (!isMain && rule.hasAction && rule.pushedContext.empty())
+					errors.push_back({ rule.line, "action on a rule of %context '" + context.name + "' without %push is not supported yet, "
+						"it would be dropped (see .scratch/subcontext-actions/issues/01-subcontext-actions-dropped.md)" });
+			}
+		}
 		if (typeLine && !eofLine)
 			errors.push_back({ typeLine, "missing <<EOF>> action, required with %type to return a '" + returnType + "' at the end of the input" });
 		if (!isIdentifier(lexerName))
@@ -421,40 +503,53 @@ namespace NanoLexer
 					errors.push_back({ macro.line, message });
 			}
 		}
-		for (const auto& rule : rules)
-		{
+		// calls 'add' on the generator, attributing its errors to 'line'
+		auto locate = [&](int line, auto add) {
 			try
 			{
-				auto expression = generator->addExpression(rule.pattern);
-				if (expression && rule.hasAction)
-					expression->addOnMatchCode(rule.action);
+				add();
 			}
 			catch (const NanoLexerException& e)
 			{
 				for (const auto& message : e.getMessages())
-					errors.push_back({ rule.line, withoutExpressionName(message) });
+					errors.push_back({ line, withoutExpressionName(message) });
 			}
-		}
-
+		};
 		if (defaultLine)
 			generator->addDefaultMainContextOnMatch(defaultAction);
 		generator->setReturnType(returnType);
-		// the end of input and unknown text actions are only allowed in the main context: errors are located
-		auto addAction = [&](int line, void (LexerGenerator::*add)(const std::string&), const std::string& code) {
-			if (!line)
-				return;
-			try
+		// the contexts are filled in order: the end of input and unknown text actions apply to the current context
+		for (std::size_t i = 0; i < contexts.size(); i++)
+		{
+			const auto& context = contexts[i];
+			if (!context.valid)
+				continue;	// already reported
+			if (i)
+				locate(context.line, [&] { generator->newContext(context.name); });
+			for (const auto& rule : context.rules)
 			{
-				(generator.get()->*add)(code);
+				locate(rule.line, [&] {
+					auto expression = generator->addExpression(rule.pattern);
+					if (!expression)
+						return;
+					if (!rule.pushedContext.empty())
+						expression->setPushContext(rule.pushedContext);
+					if (rule.pop)
+						expression->setPopAction();
+					if (rule.hasAction)
+						expression->addOnMatchCode(rule.action);
+				});
 			}
-			catch (const NanoLexerException& e)
-			{
-				for (const auto& message : e.getMessages())
-					errors.push_back({ line, message });
-			}
-		};
-		addAction(eofLine, &LexerGenerator::addOnEof, eofAction);
-		addAction(unknownLine, &LexerGenerator::addOnUnknown, unknownAction);
+			if (context.unknownLine)
+				locate(context.unknownLine, [&] {
+					if (i)
+						generator->addOnCurrentContextFailure(context.unknownAction);
+					else
+						generator->addOnUnknown(context.unknownAction);
+				});
+			if (eofLine && eofContext == i)
+				locate(eofLine, [&] { generator->addOnEof(eofAction); });	// error outside the main context
+		}
 		generator->addPrologue(prologue);
 		if (userCode.find_first_not_of(" \t\n") != std::string::npos)
 			generator->addMembers(userCode);

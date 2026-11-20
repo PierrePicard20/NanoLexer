@@ -249,3 +249,104 @@ TEST(DescriptionReaderTest, DefaultActionErrorsAreLocated) {
               errorsOf("%%\n%default {\n}\n%default {}\nabc\n"));
     ASSERT_EQ(std::vector<std::string>{ "test.nl(1): unknown directive '%default'" }, errorsOf("%default {}\n%%\nabc\n"));
 }
+
+TEST(DescriptionReaderTest, ContextsMatchHandBuiltGenerator) {
+    std::string expected;
+    {
+        LexerGenerator handBuilt("ReaderContextsHandBuilt", true);
+        handBuilt.addExpression("[a-z]+");
+        handBuilt.addExpression("/\\*")->setPushContext("Comment")->addOnMatchCode(" return accepted; ");
+        handBuilt.addExpression("\"\\\"\"")->setPushContext("String");
+        handBuilt.newContext("Comment");
+        handBuilt.addExpression("[^\\*]+");
+        handBuilt.addExpression("\\*\\/")->setPopAction();
+        handBuilt.addExpression("\\*");
+        handBuilt.newContext("Escape");
+        handBuilt.addExpression(".")->setPopAction();
+        handBuilt.newContext("String");
+        handBuilt.addExpression("[^\\\"\\\\]+");
+        handBuilt.addExpression("\\\\")->setPushContext("Escape")->addOnMatchCode(" escapes++; ");
+        handBuilt.addExpression("\"\\\"\"")->setPopAction();
+        expected = debugStringOf(handBuilt);
+    }
+
+    auto description = readDescription(
+R"nl(%name ReaderContextsParsed
+%%
+[a-z]+
+/\*     %push Comment   { return accepted; }
+"\""    %push String
+<<UNKNOWN>>             { return accepted; }
+
+%context Comment
+[^\*]+
+\*\/    %pop
+\*
+
+%context Escape
+.       %pop
+
+%context String
+[^\"\\]+
+\\      %push Escape    { escapes++; }
+"\""    %pop
+<<UNKNOWN>>             { failed = true; }
+)nl", "test.nl");
+    ASSERT_EQ(std::vector<std::string>{}, description.errors);
+    auto& generator = *description.generator;
+    // getExpression() only finds the rules of the last context (String)
+    auto escape = generator.getExpression("_lexeme_9");
+    ASSERT_NE(nullptr, escape);
+    ASSERT_NE(nullptr, generator.getExpression("_lexeme_8"));
+    ASSERT_NE(nullptr, generator.getExpression("_lexeme_10"));
+    ASSERT_EQ(LexerGenerator::ActionOnMatch::push, escape->getAction());
+    ASSERT_EQ("Escape", escape->getPushedContext());
+    ASSERT_EQ(" escapes++; ", escape->getOnMatchCode());
+    ASSERT_EQ(LexerGenerator::ActionOnMatch::none, generator.getExpression("_lexeme_8")->getAction());
+    ASSERT_EQ(LexerGenerator::ActionOnMatch::pop, generator.getExpression("_lexeme_10")->getAction());
+    ASSERT_EQ(" return accepted; ", generator.getOnUnknown());	// the <<UNKNOWN>> of String is its failure code
+    ASSERT_EQ(expected, debugStringOf(generator));
+}
+
+TEST(DescriptionReaderTest, ContextCommandErrorsAreLocated) {
+    ASSERT_EQ(std::vector<std::string>{ "test.nl(2): unknown context 'Foo' in %push" }, errorsOf("%%\nabc %push Foo\n"));
+    ASSERT_EQ(std::vector<std::string>{ "test.nl(4): unknown context 'Foo' in %push" },
+              errorsOf("%%\na %push C\n%context C\nb %push Foo\nc %pop\n"));
+    ASSERT_EQ(std::vector<std::string>{ "test.nl(2): %pop not allowed in the main context" }, errorsOf("%%\nabc %pop\n"));
+    ASSERT_EQ(std::vector<std::string>{ "test.nl(2): %push expects a context name" }, errorsOf("%%\nabc %push\n"));
+    ASSERT_EQ(std::vector<std::string>{ "test.nl(2): %push expects a context name" }, errorsOf("%%\nabc %push { x; }\n"));
+    ASSERT_EQ(std::vector<std::string>{ "test.nl(2): unknown command '%begin', expected %push or %pop" }, errorsOf("%%\nabc %begin C\n"));
+    ASSERT_EQ(std::vector<std::string>{ "test.nl(4): unexpected text after the pattern: '%pop x'" },
+              errorsOf("%%\na %push C\n%context C\nb %pop x\n"));
+}
+
+TEST(DescriptionReaderTest, ContextDeclarationErrorsAreLocated) {
+    ASSERT_EQ(std::vector<std::string>{ "test.nl(5): duplicate %context 'C', already declared at line 3" },
+              errorsOf("%%\na %push C\n%context C\nb %pop\n%context C\nc %pop\n"));
+    ASSERT_EQ(std::vector<std::string>{ "test.nl(3): %context expects a context name" }, errorsOf("%%\na\n%context\nb %pop\n"));
+    ASSERT_EQ(std::vector<std::string>{ "test.nl(3): invalid context name 'my-context'" }, errorsOf("%%\na\n%context my-context\nb %pop\n"));
+    ASSERT_EQ(std::vector<std::string>{ "test.nl(3): invalid context name 'main_context'" }, errorsOf("%%\na\n%context main_context\nb %pop\n"));
+    ASSERT_EQ(std::vector<std::string>{ "test.nl(3): no rule in %context 'C'" }, errorsOf("%%\na %push C\n%context C\n<<UNKNOWN>> {}\n"));
+    ASSERT_EQ(std::vector<std::string>{ "test.nl: no rule in the main context" }, errorsOf("%%\n%context C\nb %pop\n"));
+    ASSERT_EQ(std::vector<std::string>{ "test.nl(1): unknown directive '%context'" }, errorsOf("%context C\n%%\na\n"));
+}
+
+TEST(DescriptionReaderTest, ActionOnNonPushingContextRuleIsLocated) {
+    std::string message = "action on a rule of %context 'C' without %push is not supported yet, it would be dropped "
+                          "(see .scratch/subcontext-actions/issues/01-subcontext-actions-dropped.md)";
+    ASSERT_EQ(std::vector<std::string>{ "test.nl(4): " + message }, errorsOf("%%\na %push C\n%context C\nb { x++; }\nc %pop\n"));
+    ASSERT_EQ(std::vector<std::string>{ "test.nl(4): " + message }, errorsOf("%%\na %push C\n%context C\nb %pop {\n}\n"));
+    // an action on a pushing rule of a %context section is kept
+    ASSERT_EQ(std::vector<std::string>{}, errorsOf("%%\na %push C\n%context C\nb %push D { x++; }\nc %pop\n%context D\nd %pop\n"));
+}
+
+TEST(DescriptionReaderTest, ContextDirectiveErrorsAreLocated) {
+    ASSERT_EQ(std::vector<std::string>{ "test.nl(4): End of input action (addOnEof()) only allowed in the main context, not in context 'C'" },
+              errorsOf("%%\na %push C\n%context C\n<<EOF>> {}\nb %pop\n"));
+    ASSERT_EQ(std::vector<std::string>{ "test.nl(4): %default only allowed in the main context, not in %context 'C'" },
+              errorsOf("%%\na %push C\n%context C\n%default {}\nb %pop\n"));
+    ASSERT_EQ(std::vector<std::string>{ "test.nl(5): duplicate <<UNKNOWN>>, already declared at line 4" },
+              errorsOf("%%\na %push C\n%context C\n<<UNKNOWN>> {}\n<<UNKNOWN>> {}\nb %pop\n"));
+    // one <<UNKNOWN>> per context
+    ASSERT_EQ(std::vector<std::string>{}, errorsOf("%%\na %push C\n<<UNKNOWN>> {}\n%context C\n<<UNKNOWN>> {}\nb %pop\n"));
+}

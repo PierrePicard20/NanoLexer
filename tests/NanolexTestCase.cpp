@@ -7,6 +7,8 @@
 #include <NlUserCodeLexer.h>
 #include <NlTypedLexer.h>
 #include <NlTypedSkipLexer.h>
+#include <CommentsLexer.h>
+#include <NlCommentsLexer.h>
 #include "checkLexemes.h"
 
 using namespace NanoLexer;
@@ -102,4 +104,33 @@ TEST(NanolexTest, TypedLexerSkipsUnknownTextWithoutUnknownAction) {
     ASSERT_EQ(2, lexer.lex());
     ASSERT_EQ(3, lexer.lex());
     ASSERT_EQ(-1, lexer.lex());
+}
+
+// NlComments.nl describes the same lexer as testgen/cMultilineCommentLexer.cpp, rule for rule (without the action of
+// the new line rule of context Comment, dropped by the library), plus a failure action in context Comment.
+TEST(NanolexTest, CommentsLexerMatchesTestgenVersion) {
+    for (const std::string text : { "/*test*/", "/*test", "a\n/* x\r\n * y **/b\n", "/* a *\n */", "/**/ /*/", "" })
+    {
+        auto expected = lexAll<CommentsLexer<std::istringstream>>(text);
+        ASSERT_FALSE(text.size() && expected.empty());
+        ASSERT_EQ(expected, lexAll<NlCommentsLexer<std::istringstream>>(text)) << "text: " << text;
+    }
+}
+
+// NlComments.nl: the action of the pushing rule runs after the pop, so getMatchString() holds the whole comment.
+TEST(NanolexTest, PushingRuleActionSeesTheWholeLexeme) {
+    std::istringstream text("a/* x\n y */b/**/");
+    NlCommentsLexer<std::istringstream> lexer(text);
+    while (lexer.lex() != NlCommentsLexer<std::istringstream>::Lexeme::eof_)
+        ;
+    ASSERT_EQ((std::vector<std::string>{ "/* x\n y */", "/**/" }), lexer.comments);
+    ASSERT_EQ(0, lexer.failures);
+}
+
+// NlComments.nl: <<UNKNOWN>> in %context Comment runs when the context fails to match.
+TEST(NanolexTest, ContextUnknownActionRunsOnContextFailure) {
+    std::istringstream text("/* a *\n */");
+    NlCommentsLexer<std::istringstream> lexer(text);
+    ASSERT_EQ(NlCommentsLexer<std::istringstream>::Lexeme::unknown_, lexer.lex());
+    ASSERT_EQ(1, lexer.failures);
 }
