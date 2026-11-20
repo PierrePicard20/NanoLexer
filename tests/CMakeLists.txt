@@ -47,6 +47,8 @@ add_custom_command(
 set (NL_LEXERS
 	NlArithmetic
 	NlWords
+	NlActions
+	NlDefault
 	)
 set (NL_HEADERS)
 foreach (lexer ${NL_LEXERS})

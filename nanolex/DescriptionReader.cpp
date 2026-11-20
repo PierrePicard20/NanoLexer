@@ -25,6 +25,8 @@ namespace NanoLexer
 		{
 			int line;
 			std::string pattern;
+			bool hasAction;
+			std::string action;	// code between the braces of the action
 		};
 
 		struct LocatedError
@@ -121,6 +123,75 @@ namespace NanoLexer
 			return line.size();
 		}
 
+		bool isIdentifierChar(char c)
+		{
+			return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_';
+		}
+
+		// Identifier or number token ending just before 'pos'.
+		std::string tokenBefore(const std::string& text, std::size_t pos)
+		{
+			auto begin = pos;
+			while (begin > 0 && (isIdentifierChar(text[begin - 1]) || text[begin - 1] == '.'))
+				begin--;
+			return text.substr(begin, pos - begin);
+		}
+
+		// Position of the '}' closing the action whose '{' is at 'open', or npos when the action is not terminated.
+		// Braces inside C++ string literals (raw ones included), character literals and comments are ignored. An
+		// ordinary string or character literal ends at the end of its line, so that a stray quote cannot hide the
+		// rest of the file.
+		std::size_t actionEnd(const std::string& text, std::size_t open)
+		{
+			int depth = 0;
+			for (std::size_t i = open; i < text.size(); i++)
+			{
+				char c = text[i];
+				if (c == '{')
+					depth++;
+				else if (c == '}')
+				{
+					if (--depth == 0)
+						return i;
+				}
+				else if (c == '/' && i + 1 < text.size() && text[i + 1] == '/')
+				{
+					i = text.find('\n', i);
+					if (i == std::string::npos)
+						return i;
+				}
+				else if (c == '/' && i + 1 < text.size() && text[i + 1] == '*')
+				{
+					i = text.find("*/", i + 2);
+					if (i == std::string::npos)
+						return i;
+					i++;
+				}
+				else if (c == '"' || c == '\'')
+				{
+					auto prefix = tokenBefore(text, i);
+					if (c == '\'' && !prefix.empty() && prefix[0] >= '0' && prefix[0] <= '9')
+						continue;	// digit separator, as in 1'000
+					if (c == '"' && (prefix == "R" || prefix == "u8R" || prefix == "uR" || prefix == "UR" || prefix == "LR"))	// raw string R"delim( ... )delim"
+					{
+						auto paren = text.find('(', i + 1);
+						if (paren == std::string::npos)
+							return paren;
+						auto closing = ")" + text.substr(i + 1, paren - i - 1) + "\"";
+						i = text.find(closing, paren);
+						if (i == std::string::npos)
+							return i;
+						i += closing.size() - 1;	// on the closing quote
+						continue;
+					}
+					for (i++; i < text.size() && text[i] != c && text[i] != '\n'; i++)
+						if (text[i] == '\\')
+							i++;
+				}
+			}
+			return std::string::npos;
+		}
+
 		// Regex errors of a rule end with " in expression '<internal name>'": the line identifies the rule better.
 		std::string withoutExpressionName(const std::string& message)
 		{
@@ -148,10 +219,45 @@ namespace NanoLexer
 		std::vector<Macro> macros;
 		std::vector<Rule> rules;
 		bool userCodeReported = false;
+		int defaultLine = 0;
+		std::string defaultAction;
+
+		// actions may span several lines: they are scanned in the whole text, its lines joined by '\n'
+		auto lines = splitLines(text);
+		std::string joined;
+		std::vector<std::size_t> lineStarts;
+		for (const auto& line : lines)
+		{
+			lineStarts.push_back(joined.size());
+			joined += line.text + "\n";
+		}
+
+		// Reads the action whose '{' is at 'column' of line 'index' into 'code'. 'index' becomes the line of the
+		// closing '}', or the last line when the action is not terminated.
+		auto readAction = [&](std::size_t& index, std::size_t column, std::string& code) {
+			auto open = lineStarts[index] + column;
+			auto close = actionEnd(joined, open);
+			if (close == std::string::npos)
+			{
+				errors.push_back({ lines[index].number, "unterminated action, missing '}'" });
+				index = lines.size() - 1;
+				return false;
+			}
+			code = joined.substr(open + 1, close - open - 1);
+			index = std::upper_bound(lineStarts.begin(), lineStarts.end(), close) - lineStarts.begin() - 1;
+			auto rest = trim(lines[index].text.substr(close + 1 - lineStarts[index]));
+			if (!rest.empty())
+			{
+				errors.push_back({ lines[index].number, "unexpected text after the action: '" + rest + "'" });
+				return false;
+			}
+			return true;
+		};
 
 		auto section = Section::definitions;
-		for (const auto& [number, line] : splitLines(text))
+		for (std::size_t index = 0; index < lines.size(); index++)
 		{
+			const auto& [number, line] = lines[index];
 			if (section == Section::userCode)
 			{
 				if (!isBlankLine(line) && !userCodeReported)
@@ -190,6 +296,23 @@ namespace NanoLexer
 						nameLine = number;
 					}
 				}
+				else if (section == Section::rules && directive == "%default")
+				{
+					auto brace = line.find_first_not_of(" \t", directive.size());
+					std::string code;
+					if (brace == std::string::npos || line[brace] != '{')
+						errors.push_back({ number, "%default expects an action '{ ... }'" });
+					else if (readAction(index, brace, code))
+					{
+						if (defaultLine)
+							errors.push_back({ number, "duplicate %default, already declared at line " + std::to_string(defaultLine) });
+						else
+						{
+							defaultLine = number;
+							defaultAction = code;
+						}
+					}
+				}
 				else
 					errors.push_back({ number, "unknown directive '" + directive + "'" });
 				continue;
@@ -205,11 +328,18 @@ namespace NanoLexer
 			else
 			{
 				auto end = patternEnd(line);
-				auto rest = trim(line.substr(end));
-				if (!rest.empty())
-					errors.push_back({ number, "unexpected text after the pattern: '" + rest + "'" });
+				auto restStart = line.find_first_not_of(" \t", end);
+				Rule rule{ number, line.substr(0, end), false, "" };
+				if (restStart == std::string::npos)
+					rules.push_back(rule);
+				else if (line[restStart] == '{')
+				{
+					rule.hasAction = readAction(index, restStart, rule.action);
+					if (rule.hasAction)
+						rules.push_back(rule);
+				}
 				else
-					rules.push_back({ number, line.substr(0, end) });
+					errors.push_back({ number, "unexpected text after the pattern: '" + trim(line.substr(end)) + "'" });
 			}
 		}
 		if (section == Section::definitions)
@@ -243,7 +373,9 @@ namespace NanoLexer
 		{
 			try
 			{
-				generator->addExpression(rule.pattern);
+				auto expression = generator->addExpression(rule.pattern);
+				if (expression && rule.hasAction)
+					expression->addOnMatchCode(rule.action);
 			}
 			catch (const NanoLexerException& e)
 			{
@@ -251,6 +383,9 @@ namespace NanoLexer
 					errors.push_back({ rule.line, withoutExpressionName(message) });
 			}
 		}
+
+		if (defaultLine)
+			generator->addDefaultMainContextOnMatch(defaultAction);
 
 		// errors without line come last
 		std::stable_sort(errors.begin(), errors.end(), [](const LocatedError& a, const LocatedError& b) {

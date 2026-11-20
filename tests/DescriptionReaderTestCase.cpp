@@ -16,6 +16,18 @@ namespace
     {
         return readDescription(text, "test.nl").errors;
     }
+
+    // Action of the n-th rule (1-based) of a description without errors; "<none>" when the rule has no action.
+    std::string actionOf(const std::string& text, int n)
+    {
+        auto description = readDescription(text, "test.nl");
+        if (!description.errors.empty())
+            return description.errors.front();
+        auto expression = description.generator->getExpression("_lexeme_" + std::to_string(n));
+        if (!expression)
+            return "<no rule>";
+        return expression->hasOnMatchCode() ? expression->getOnMatchCode() : "<none>";
+    }
 }
 
 TEST(DescriptionReaderTest, MainContextRulesMatchHandBuiltGenerator) {
@@ -126,4 +138,48 @@ TEST(DescriptionReaderTest, NonEmptyUserCodeSectionIsReported) {
 TEST(DescriptionReaderTest, ErrorsAreSortedByLine) {
     ASSERT_EQ((std::vector<std::string>{ "test.nl(2): unknown directive '%foo'", "test.nl(4): syntax error at row 5" }),
               errorsOf("%name Sorted\n%foo\n%%\na|(b]|c\n"));
+}
+
+TEST(DescriptionReaderTest, SingleLineActionIsAttachedToItsRule) {
+    auto text = "%%\nabc     { return accepted; }\ndef\n";
+    ASSERT_EQ(" return accepted; ", actionOf(text, 1));
+    ASSERT_EQ("<none>", actionOf(text, 2));
+}
+
+TEST(DescriptionReaderTest, EmptyActionIsAnAction) {
+    ASSERT_EQ("", actionOf("%%\nabc {}\n", 1));
+}
+
+TEST(DescriptionReaderTest, PatternWithBlankAndBracesIsNotAnAction) {
+    ASSERT_EQ("{}", actionOf("%%\n\"{ }\"\t{{}}\n", 1));
+}
+
+TEST(DescriptionReaderTest, MultiLineActionIsAttachedToItsRule) {
+    auto text = "%%\nabc {\n    if (x) { y(); }\n}\ndef { z(); }\n";
+    ASSERT_EQ("\n    if (x) { y(); }\n", actionOf(text, 1));
+    ASSERT_EQ(" z(); ", actionOf(text, 2));
+}
+
+TEST(DescriptionReaderTest, BracesInLiteralsAndCommentsDoNotEndAnAction) {
+    std::string action = R"--( s = "}\"}"; c = '}'; d = '\''; e = '"'; // }
+    /* } */ r = R"x(})" })x"; n = 1'000; )--";
+    auto text = "%%\nabc {" + action + "}\ndef\n";
+    ASSERT_EQ(action, actionOf(text, 1));
+    ASSERT_EQ("<none>", actionOf(text, 2));
+}
+
+TEST(DescriptionReaderTest, UnterminatedActionIsLocated) {
+    ASSERT_EQ(std::vector<std::string>{ "test.nl(3): unterminated action, missing '}'" }, errorsOf("%%\nabc\ndef { if (x) {\n}\n%%\n"));
+    ASSERT_EQ(std::vector<std::string>{ "test.nl(2): unterminated action, missing '}'" }, errorsOf("%%\nabc { // }\n"));
+}
+
+TEST(DescriptionReaderTest, TextAfterActionIsLocated) {
+    ASSERT_EQ(std::vector<std::string>{ "test.nl(3): unexpected text after the action: 'def'" }, errorsOf("%%\nabc {\n} def\n"));
+}
+
+TEST(DescriptionReaderTest, DefaultActionErrorsAreLocated) {
+    ASSERT_EQ(std::vector<std::string>{ "test.nl(3): %default expects an action '{ ... }'" }, errorsOf("%%\nabc\n%default\n"));
+    ASSERT_EQ(std::vector<std::string>{ "test.nl(4): duplicate %default, already declared at line 2" },
+              errorsOf("%%\n%default {\n}\n%default {}\nabc\n"));
+    ASSERT_EQ(std::vector<std::string>{ "test.nl(1): unknown directive '%default'" }, errorsOf("%default {}\n%%\nabc\n"));
 }

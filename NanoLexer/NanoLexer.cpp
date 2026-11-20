@@ -94,7 +94,7 @@ namespace NanoLexer
 {
 	// class NanoLexer::Expression
 	LexerGenerator::Expression::Expression(const std::string& name, const std::string& expr, LexerGenerator& lg)
-		:name{ name }, expr{ expr }, action{ ActionOnMatch::none }, lexerGenerator{ lg }
+		:name{ name }, expr{ expr }, hasMatchCode{ false }, action{ ActionOnMatch::none }, lexerGenerator{ lg }
 	{
 	}
 
@@ -115,6 +115,7 @@ namespace NanoLexer
 	LexerGenerator::Expression* LexerGenerator::Expression::addOnMatchCode(const std::string& code)
 	{
 		matchCode = code;
+		hasMatchCode = true;
 		return this;
 	}
 
@@ -130,7 +131,7 @@ namespace NanoLexer
 
 	// class NanoLexer
 	LexerGenerator::LexerGenerator(const std::string& name, bool throwEarly_)
-		:lexemeCount{ 0 }, currentContext{ mainContextName , {} }, lexerName{ name }, throwEarly{ throwEarly_ }
+		:lexemeCount{ 0 }, hasDefaultOnMatch{ false }, currentContext{ mainContextName , {} }, lexerName{ name }, throwEarly{ throwEarly_ }
 	{
 		variables.emplace_back("$(LexerName)", name);
 		lexemeId = 1;
@@ -321,10 +322,12 @@ namespace NanoLexer
 					break;
 				}
 
-				if (!expr.second.matchCode.empty() && isMainContext)
+				// an action without return ends with a break: the lexeme is ignored and lex() loops to the next one
+				if (expr.second.hasMatchCode && isMainContext)
 				{
 					onMatch << "                case Lexeme::" << expr.second.getName() << "_:" << std::endl;
-					onMatch << "                    {" << expr.second.matchCode << " return accepted;}" << std::endl;
+					onMatch << "                    {" << expr.second.matchCode << "}" << std::endl;
+					onMatch << "                    break;" << std::endl;
 				}
 				if (isMainContext)
 				{
@@ -360,7 +363,13 @@ namespace NanoLexer
 			lexemeCount += context->getLexemeCount();
 		}
 		onMatch << "                default:" << std::endl;
-		onMatch << "                    {" << defaultOnMatch << " return accepted;}" << std::endl;
+		if (hasDefaultOnMatch)
+		{
+			onMatch << "                    {" << defaultOnMatch << "}" << std::endl;
+			onMatch << "                    break;" << std::endl;
+		}
+		else
+			onMatch << "                    return accepted;" << std::endl;
 
 		std::map<int, std::string>	id2OnMatchCode;
 		id = 1;
@@ -508,6 +517,7 @@ namespace NanoLexer
 	void LexerGenerator::addDefaultMainContextOnMatch(const std::string& code)
 	{
 		defaultOnMatch = code;
+		hasDefaultOnMatch = true;
 	}
 
 	///////////////////////////////////////////////////////// private methods ////////////////////////////////////////////////////

@@ -6,8 +6,8 @@ void genCMultilineCommentLexer()
     {
         LexerGenerator lexGen("Comments");
 
-        auto actionOnNewLine = "line++; row = 1;";
-        auto actionOnAllOtherLexeme = "row += getMatchLength()-nbCharToSubstract;";
+        auto actionOnNewLine = "line++; row = 1; return accepted;";
+        auto actionOnAllOtherLexeme = "row += getMatchLength()-nbCharToSubstract; return accepted;";
 
         lexGen.addOnStartLex("                nbCharToSubstract = 0;");
         lexGen.addPrivateMembers("        int line,row,nbCharToSubstract;");      // add private fields to the lexer

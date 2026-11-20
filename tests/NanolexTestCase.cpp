@@ -2,6 +2,8 @@
 #include <ArithmeticLexer.h>
 #include <NlArithmeticLexer.h>
 #include <NlWordsLexer.h>
+#include <NlActionsLexer.h>
+#include <NlDefaultLexer.h>
 #include "checkLexemes.h"
 
 using namespace NanoLexer;
@@ -37,4 +39,21 @@ TEST(NanolexTest, LexerNamedAfterFileBaseName) {
     std::vector<Token<Lexer::Lexeme>> expectedLexemes = {
         {Lexer::Lexeme::_lexeme_1_, "ab"}, {Lexer::Lexeme::_lexeme_2_, " "}, {Lexer::Lexeme::_lexeme_1_, "cd"} };
     checkLexemes<Lexer, Lexer::Lexeme>("ab cd", expectedLexemes);
+}
+
+// NlActions.nl: the blank rule has an action without return, the number rule returns only for non-zero numbers.
+TEST(NanolexTest, LexemesWithNonReturningActionAreIgnored) {
+    using Lexer = NlActionsLexer<std::istringstream>;
+    std::vector<Token<Lexer::Lexeme>> expectedLexemes = {
+        {Lexer::Lexeme::_lexeme_2_, "ab"}, {Lexer::Lexeme::_lexeme_3_, "12"}, {Lexer::Lexeme::_lexeme_2_, "cd"} };
+    checkLexemes<Lexer, Lexer::Lexeme>("  ab 12\t0 \r\ncd\n", expectedLexemes);
+    checkLexemes<Lexer, Lexer::Lexeme>(" \n0  ", {});
+}
+
+// NlDefault.nl: the action-less word rule runs %default, which ignores "skip"; the number rule has its own action.
+TEST(NanolexTest, ActionLessRulesRunDefaultAction) {
+    using Lexer = NlDefaultLexer<std::istringstream>;
+    std::vector<Token<Lexer::Lexeme>> expectedLexemes = {
+        {Lexer::Lexeme::_lexeme_1_, "abc"}, {Lexer::Lexeme::_lexeme_2_, "12"}, {Lexer::Lexeme::_lexeme_1_, "skipped"} };
+    checkLexemes<Lexer, Lexer::Lexeme>("abc skip 12 skipped skip", expectedLexemes);
 }

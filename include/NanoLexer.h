@@ -33,7 +33,9 @@ namespace NanoLexer
 			Expression* setPopAction();
 
 			// Add statements in the generated lexer that will be called when a match if found for the expression.
-			// Overrides LexerGenerator::addDefaultOnMatch() for the present expression
+			// Overrides LexerGenerator::addDefaultMainContextOnMatch() for the present expression, even when 'code' is empty.
+			// In the main context, the code may return a value from lex(); otherwise the lexeme is ignored and lex()
+			// moves on to the next one.
 			Expression* addOnMatchCode(const std::string& code);
 
 			// Getters
@@ -41,6 +43,8 @@ namespace NanoLexer
 			inline const std::string& getExpression() const { return expr; }
 			inline ActionOnMatch getAction() const { return action; }
 			inline const std::string& getPushedContext() const { return pushedContext; }
+			inline bool hasOnMatchCode() const { return hasMatchCode; }
+			inline const std::string& getOnMatchCode() const { return matchCode; }
 		private:
 			friend LexerGenerator;
 
@@ -50,6 +54,7 @@ namespace NanoLexer
 			std::string name;
 			std::string expr;
 			std::string matchCode;
+			bool hasMatchCode;	// set by addOnMatchCode(), even with an empty code
 			ActionOnMatch	action;	// default is none
 			std::string		pushedContext;	// valid only when action==ActionOnMatch::push
 		};
@@ -114,7 +119,9 @@ namespace NanoLexer
 		// are executed when no match was found.
 		void addOnCurrentContextFailure(const std::string& code);
 
-		// Add statements executed each time a lexeme of the main context is matched.
+		// Set the default action: statements executed when a lexeme of the main context is matched by an expression
+		// without code of its own (see Expression::addOnMatchCode()). The code may return a value from lex(); otherwise
+		// the lexeme is ignored. Without default action, lex() returns the matched lexeme.
 		void addDefaultMainContextOnMatch(const std::string& code);
 
 		void addErrorMessage(const std::string& msg);
@@ -134,6 +141,7 @@ namespace NanoLexer
 		std::string onCreate;
 		std::string onStartLex;
 		std::string defaultOnMatch;
+		bool hasDefaultOnMatch;
 		std::map<std::string, std::string> contextName2contextFailure;
 
 		std::map<std::string, std::string>														name2expr;
