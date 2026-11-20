@@ -418,6 +418,9 @@ namespace NanoLexer
 		variables.emplace_back("$(LexemeNames)", lexNames.str());
 		variables.emplace_back("$(GetLexemeNamesCases)", nameCases.str());
 		variables.emplace_back("$(GetLexemeExpressionsCases)", exprCases.str());
+		// user code last, so that it is not searched for the other placeholders
+		variables.emplace_back("$(Prologue)", prologue);
+		variables.emplace_back("$(Members)", members);
 
 		if (!errorMessages.empty())
 			throw NanoLexerException(errorMessages);
@@ -475,6 +478,7 @@ namespace NanoLexer
 				while ((n = str.find(pair.first, n)) != std::string::npos)
 				{
 					str.replace(n, pair.first.size(), pair.second);
+					n += pair.second.size();	// the inserted text is not searched again
 				}
 			}
 
@@ -500,6 +504,14 @@ namespace NanoLexer
 	void LexerGenerator::addPrivateMembers(const std::string& code)
 	{
 		privateMembers = code;
+	}
+	void LexerGenerator::addPrologue(const std::string& code)
+	{
+		prologue = code;
+	}
+	void LexerGenerator::addMembers(const std::string& code)
+	{
+		members = code;
 	}
 	void LexerGenerator::addOnCreate(const std::string& code)
 	{

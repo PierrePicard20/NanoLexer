@@ -107,6 +107,17 @@ namespace NanoLexer
 		// Replace the placeholder $(PrivateMembers) in the skeleton file.
 		void addPrivateMembers(const std::string& code);
 
+		// Set code copied verbatim before the lexer class, outside its namespace (e.g. #include directives, declarations
+		// of the types used by the actions). Replace the placeholder $(Prologue) in the skeleton file.
+		void addPrologue(const std::string& code);
+
+		// Set code copied verbatim at the very end of the lexer class, in a public section (fields and methods used by
+		// the actions). Replace the placeholder $(Members) in the skeleton file.
+		void addMembers(const std::string& code);
+
+		inline const std::string& getPrologue() const { return prologue; }
+		inline const std::string& getMembers() const { return members; }
+
 		// Add initialization statements in the ctor of the generated lexer class.
 		// Replace the placeholder $(OnCreate) in the skeleton file.
 		void addOnCreate(const std::string& code);
@@ -138,6 +149,8 @@ namespace NanoLexer
 		std::string publicMembers;
 		std::string protectedMembers;
 		std::string privateMembers;
+		std::string prologue;
+		std::string members;
 		std::string onCreate;
 		std::string onStartLex;
 		std::string defaultOnMatch;

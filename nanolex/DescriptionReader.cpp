@@ -52,9 +52,15 @@ namespace NanoLexer
 			return (begin < end) ? std::string(begin, end) : std::string();
 		}
 
+		// True for a line made of 'delimiter' at column 0, possibly followed by blanks ("%%", "%{", "%}").
+		bool isDelimiterLine(const std::string& line, const char* delimiter)
+		{
+			return line.compare(0, 2, delimiter) == 0 && isBlankLine(line.substr(2));
+		}
+
 		bool isSeparator(const std::string& line)
 		{
-			return line.compare(0, 2, "%%") == 0 && isBlankLine(line.substr(2));
+			return isDelimiterLine(line, "%%");
 		}
 
 		bool isIdentifier(const std::string& str)
@@ -218,7 +224,8 @@ namespace NanoLexer
 		int nameLine = 0;
 		std::vector<Macro> macros;
 		std::vector<Rule> rules;
-		bool userCodeReported = false;
+		std::string prologue;	// content of the %{ ... %} blocks
+		std::string userCode;
 		int defaultLine = 0;
 		std::string defaultAction;
 
@@ -260,11 +267,7 @@ namespace NanoLexer
 			const auto& [number, line] = lines[index];
 			if (section == Section::userCode)
 			{
-				if (!isBlankLine(line) && !userCodeReported)
-				{
-					errors.push_back({ number, "the user code section is not supported yet" });
-					userCodeReported = true;
-				}
+				userCode += line + "\n";
 				continue;
 			}
 			if (isSeparator(line))
@@ -279,6 +282,18 @@ namespace NanoLexer
 				errors.push_back({ number, (section == Section::definitions)
 					? "unexpected indented line in the definitions section"
 					: "unexpected indented line, a pattern must start at column 0" });
+				continue;
+			}
+			if (section == Section::definitions && isDelimiterLine(line, "%{"))
+			{
+				auto close = index + 1;
+				while (close < lines.size() && !isDelimiterLine(lines[close].text, "%}"))
+					close++;
+				if (close == lines.size())
+					errors.push_back({ number, "unterminated '%{' block, missing '%}'" });
+				for (auto i = index + 1; i < close; i++)
+					prologue += lines[i].text + "\n";
+				index = std::min(close, lines.size() - 1);
 				continue;
 			}
 			if (line[0] == '%')
@@ -386,6 +401,9 @@ namespace NanoLexer
 
 		if (defaultLine)
 			generator->addDefaultMainContextOnMatch(defaultAction);
+		generator->addPrologue(prologue);
+		if (userCode.find_first_not_of(" \t\n") != std::string::npos)
+			generator->addMembers(userCode);
 
 		// errors without line come last
 		std::stable_sort(errors.begin(), errors.end(), [](const LocatedError& a, const LocatedError& b) {

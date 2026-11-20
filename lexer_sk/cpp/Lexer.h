@@ -7,6 +7,7 @@
 #ifndef $(LexerName)LEXER
 #define $(LexerName)LEXER
 #include <string>
+$(Prologue)
 
 namespace NanoLexer
 {
@@ -145,6 +146,9 @@ $(LexerContextsMethods)
             accepted = l;
             nbReadAfterAccept = 0;
         }
+
+    public:
+$(Members)
     };
 }
 #endif

@@ -49,6 +49,7 @@ set (NL_LEXERS
 	NlWords
 	NlActions
 	NlDefault
+	NlUserCode
 	)
 set (NL_HEADERS)
 foreach (lexer ${NL_LEXERS})

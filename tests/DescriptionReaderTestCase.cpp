@@ -131,8 +131,33 @@ TEST(DescriptionReaderTest, MacroWithoutRegexIsReported) {
     ASSERT_EQ(std::vector<std::string>{ "test.nl(1): missing regular expression for macro 'Lonely'" }, errorsOf("Lonely\n%%\nabc\n"));
 }
 
-TEST(DescriptionReaderTest, NonEmptyUserCodeSectionIsReported) {
-    ASSERT_EQ(std::vector<std::string>{ "test.nl(4): the user code section is not supported yet" }, errorsOf("%%\nabc\n%%\nint x;\nint y;\n"));
+TEST(DescriptionReaderTest, UserCodeSectionGivesMembers) {
+    auto description = readDescription("%%\nabc\n%%\n    int x;\n\n%%\n    int y;\n", "test.nl");
+    ASSERT_TRUE(description.errors.empty()) << description.errors.front();
+    ASSERT_EQ("    int x;\n\n%%\n    int y;\n", description.generator->getMembers());
+}
+
+TEST(DescriptionReaderTest, BlankUserCodeSectionGivesNoMembers) {
+    auto description = readDescription("%%\nabc\n%%\n  \n\t\n", "test.nl");
+    ASSERT_TRUE(description.errors.empty()) << description.errors.front();
+    ASSERT_EQ("", description.generator->getMembers());
+}
+
+TEST(DescriptionReaderTest, PrologueBlocksAreJoined) {
+    auto description = readDescription(
+        "%{\n#include <vector>\n  // %% and {Macro} are copied as is\n%}\nReaderPrologueDigit [0-9]\n%{ \n struct T;\n%}\t\n%%\n{ReaderPrologueDigit}\n",
+        "test.nl");
+    ASSERT_TRUE(description.errors.empty()) << description.errors.front();
+    ASSERT_EQ("#include <vector>\n  // %% and {Macro} are copied as is\n struct T;\n", description.generator->getPrologue());
+}
+
+TEST(DescriptionReaderTest, UnterminatedPrologueIsLocated) {
+    ASSERT_EQ((std::vector<std::string>{ "test.nl(2): unterminated '%{' block, missing '%}'", "test.nl: missing '%%' between the definitions and rules sections" }),
+              errorsOf("%name Unterminated\n%{\n#include <vector>\n%%\nabc\n"));
+}
+
+TEST(DescriptionReaderTest, PrologueInRulesSectionIsReported) {
+    ASSERT_EQ(std::vector<std::string>{ "test.nl(3): unknown directive '%{'" }, errorsOf("%%\nabc\n%{\n"));
 }
 
 TEST(DescriptionReaderTest, ErrorsAreSortedByLine) {

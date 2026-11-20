@@ -4,6 +4,7 @@
 #include <NlWordsLexer.h>
 #include <NlActionsLexer.h>
 #include <NlDefaultLexer.h>
+#include <NlUserCodeLexer.h>
 #include "checkLexemes.h"
 
 using namespace NanoLexer;
@@ -56,4 +57,20 @@ TEST(NanolexTest, ActionLessRulesRunDefaultAction) {
     std::vector<Token<Lexer::Lexeme>> expectedLexemes = {
         {Lexer::Lexeme::_lexeme_1_, "abc"}, {Lexer::Lexeme::_lexeme_2_, "12"}, {Lexer::Lexeme::_lexeme_1_, "skipped"} };
     checkLexemes<Lexer, Lexer::Lexeme>("abc skip 12 skipped skip", expectedLexemes);
+}
+
+// NlUserCode.nl: NlUserCodeWord is declared in %{ %}; the fields and getLine() come from the user code section and
+// are updated by the actions.
+TEST(NanolexTest, PrologueAndUserCodeAreUsableByActions) {
+    using Lexer = NlUserCodeLexer<std::istringstream>;
+    std::istringstream text("ab cd\n\nef");
+    Lexer lexer(text);
+    while (lexer.lex() != Lexer::Lexeme::eof_)
+        ;
+    ASSERT_EQ(3, lexer.getLine());
+    ASSERT_EQ(3u, lexer.words.size());
+    ASSERT_EQ("cd", lexer.words[1].text);
+    ASSERT_EQ(1, lexer.words[1].line);
+    ASSERT_EQ("ef", lexer.words[2].text);
+    ASSERT_EQ(3, lexer.words[2].line);
 }
