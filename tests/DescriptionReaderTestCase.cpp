@@ -202,6 +202,47 @@ TEST(DescriptionReaderTest, TextAfterActionIsLocated) {
     ASSERT_EQ(std::vector<std::string>{ "test.nl(3): unexpected text after the action: 'def'" }, errorsOf("%%\nabc {\n} def\n"));
 }
 
+TEST(DescriptionReaderTest, TypeEofAndUnknownConfigureTheGenerator) {
+    auto description = readDescription("%%\n%type std::pair<int, int>\nabc\n<<EOF>>  { return {}; }\n<<UNKNOWN>> {\n  return { 1, 2 };\n}\n", "test.nl");
+    ASSERT_TRUE(description.errors.empty()) << description.errors.front();
+    ASSERT_EQ("std::pair<int, int>", description.generator->getReturnType());
+    ASSERT_TRUE(description.generator->hasOnEof());
+    ASSERT_EQ(" return {}; ", description.generator->getOnEof());
+    ASSERT_TRUE(description.generator->hasOnUnknown());
+    ASSERT_EQ("\n  return { 1, 2 };\n", description.generator->getOnUnknown());
+    // <<EOF>> and <<UNKNOWN>> are not rules
+    ASSERT_EQ(nullptr, description.generator->getExpression("_lexeme_2"));
+}
+
+TEST(DescriptionReaderTest, NoTypeGivesDefaultReturnTypeAndNoEofNorUnknownAction) {
+    auto description = readDescription("%%\nabc\n", "test.nl");
+    ASSERT_TRUE(description.errors.empty()) << description.errors.front();
+    ASSERT_EQ("", description.generator->getReturnType());
+    ASSERT_FALSE(description.generator->hasOnEof());
+    ASSERT_FALSE(description.generator->hasOnUnknown());
+}
+
+TEST(DescriptionReaderTest, TypeWithoutEofIsLocated) {
+    ASSERT_EQ(std::vector<std::string>{ "test.nl(3): missing <<EOF>> action, required with %type to return a 'Token' at the end of the input" },
+              errorsOf("%%\nabc\n%type Token\n<<UNKNOWN>> {}\n"));
+}
+
+TEST(DescriptionReaderTest, TypeErrorsAreLocated) {
+    ASSERT_EQ(std::vector<std::string>{ "test.nl(2): %type expects a type" }, errorsOf("%%\n%type\nabc\n"));
+    ASSERT_EQ(std::vector<std::string>{ "test.nl(3): duplicate %type, already declared at line 2" },
+              errorsOf("%%\n%type int\n%type long\nabc\n<<EOF>> { return 0; }\n"));
+    ASSERT_EQ(std::vector<std::string>{ "test.nl(1): unknown directive '%type'" }, errorsOf("%type int\n%%\nabc\n"));
+}
+
+TEST(DescriptionReaderTest, EofAndUnknownErrorsAreLocated) {
+    ASSERT_EQ(std::vector<std::string>{ "test.nl(3): <<EOF>> expects an action '{ ... }'" }, errorsOf("%%\nabc\n<<EOF>>\n"));
+    ASSERT_EQ(std::vector<std::string>{ "test.nl(3): <<UNKNOWN>> expects an action '{ ... }'" }, errorsOf("%%\nabc\n<<UNKNOWN>> x\n"));
+    ASSERT_EQ(std::vector<std::string>{ "test.nl(5): duplicate <<EOF>>, already declared at line 2" },
+              errorsOf("%%\n<<EOF>> {\n}\nabc\n<<EOF>> {}\n"));
+    ASSERT_EQ(std::vector<std::string>{ "test.nl(4): duplicate <<UNKNOWN>>, already declared at line 3" },
+              errorsOf("%%\nabc\n<<UNKNOWN>> {}\n<<UNKNOWN>> {}\n"));
+}
+
 TEST(DescriptionReaderTest, DefaultActionErrorsAreLocated) {
     ASSERT_EQ(std::vector<std::string>{ "test.nl(3): %default expects an action '{ ... }'" }, errorsOf("%%\nabc\n%default\n"));
     ASSERT_EQ(std::vector<std::string>{ "test.nl(4): duplicate %default, already declared at line 2" },

@@ -38,7 +38,7 @@ $(OnCreate)
 		inline Lexeme getAcceptedLexeme() const {return accepted;}
 		inline int getMatchLength() const {return nbRead;}
 
-        Lexeme lex()
+        $(ReturnType) lex()
         {
             while (true)
             {
@@ -65,10 +65,6 @@ $(OnStartLex)
                 }
                 switch (accepted)
                 {
-                case Lexeme::eof_:
-                    return Lexeme::eof_;
-                case Lexeme::unknown_:
-                    return Lexeme::unknown_;
 $(LexCases)
                 }
             }

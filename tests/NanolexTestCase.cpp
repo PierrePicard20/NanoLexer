@@ -5,6 +5,8 @@
 #include <NlActionsLexer.h>
 #include <NlDefaultLexer.h>
 #include <NlUserCodeLexer.h>
+#include <NlTypedLexer.h>
+#include <NlTypedSkipLexer.h>
 #include "checkLexemes.h"
 
 using namespace NanoLexer;
@@ -73,4 +75,31 @@ TEST(NanolexTest, PrologueAndUserCodeAreUsableByActions) {
     ASSERT_EQ(1, lexer.words[1].line);
     ASSERT_EQ("ef", lexer.words[2].text);
     ASSERT_EQ(3, lexer.words[2].line);
+}
+
+// NlTyped.nl: lex() returns NlTypedToken, declared in %{ %}; the blank rule runs the non-returning %default.
+TEST(NanolexTest, TypedLexerReturnsTokensEofAndUnknown) {
+    std::istringstream text("ab 12 ?! cd\n");
+    NlTypedLexer<std::istringstream> lexer(text);
+    std::vector<std::pair<NlTypedKind, std::string>> expected = { {NlTypedKind::word, "ab"}, {NlTypedKind::number, "12"},
+        {NlTypedKind::unknown, "?!"}, {NlTypedKind::word, "cd"}, {NlTypedKind::end, ""} };
+    for (const auto& [kind, str] : expected)
+    {
+        auto token = lexer.lex();
+        ASSERT_EQ(kind, token.kind) << "expected: " << str;
+        ASSERT_EQ(str, token.text);
+    }
+    ASSERT_EQ(4, lexer.blanks);
+    // end of input never reaches the non-returning %default: lex() returns the <<EOF>> token again
+    ASSERT_EQ(NlTypedKind::end, lexer.lex().kind);
+    ASSERT_EQ(4, lexer.blanks);
+}
+
+// NlTypedSkip.nl: with %type and no <<UNKNOWN>>, unknown text is skipped.
+TEST(NanolexTest, TypedLexerSkipsUnknownTextWithoutUnknownAction) {
+    std::istringstream text("ab ?? cde!");
+    NlTypedSkipLexer<std::istringstream> lexer(text);
+    ASSERT_EQ(2, lexer.lex());
+    ASSERT_EQ(3, lexer.lex());
+    ASSERT_EQ(-1, lexer.lex());
 }

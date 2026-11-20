@@ -50,6 +50,8 @@ set (NL_LEXERS
 	NlActions
 	NlDefault
 	NlUserCode
+	NlTyped
+	NlTypedSkip
 	)
 set (NL_HEADERS)
 foreach (lexer ${NL_LEXERS})

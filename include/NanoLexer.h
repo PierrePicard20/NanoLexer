@@ -132,8 +132,32 @@ namespace NanoLexer
 
 		// Set the default action: statements executed when a lexeme of the main context is matched by an expression
 		// without code of its own (see Expression::addOnMatchCode()). The code may return a value from lex(); otherwise
-		// the lexeme is ignored. Without default action, lex() returns the matched lexeme.
+		// the lexeme is ignored. Without default action, lex() returns the matched lexeme when there is no return type,
+		// and ignores the lexeme with a return type (see setReturnType()).
 		void addDefaultMainContextOnMatch(const std::string& code);
+
+		// Set the return type of lex() (default: the Lexeme enum of the generated class). With a return type, an end of
+		// input action is required (see addOnEof()) and the implicit default action does nothing.
+		// Replace the placeholder $(ReturnType) in the skeleton file.
+		void setReturnType(const std::string& type);
+
+		// Set the end of input action: statements executed by lex() at the end of the input, never by the default
+		// action. They should return a value from lex(), which is called again otherwise. Without end of input action,
+		// lex() returns Lexeme::eof_ (only allowed without return type). Must be called in the main context.
+		void addOnEof(const std::string& code);
+
+		// Set the unknown text action: statements executed by lex() when text matching no expression of the main
+		// context is found (getMatchString() returns it), never by the default action. The code may return a value from
+		// lex(); otherwise the unknown text is skipped. Without unknown text action, lex() returns Lexeme::unknown_
+		// without return type and skips the unknown text with a return type. Must be called in the main context: in
+		// other contexts, see addOnCurrentContextFailure().
+		void addOnUnknown(const std::string& code);
+
+		inline const std::string& getReturnType() const { return returnType; }
+		inline bool hasOnEof() const { return hasOnEofCode; }
+		inline const std::string& getOnEof() const { return onEof; }
+		inline bool hasOnUnknown() const { return hasOnUnknownCode; }
+		inline const std::string& getOnUnknown() const { return onUnknown; }
 
 		void addErrorMessage(const std::string& msg);
 		void addErrorMessages(const std::vector<std::string>& msgs);
@@ -155,6 +179,11 @@ namespace NanoLexer
 		std::string onStartLex;
 		std::string defaultOnMatch;
 		bool hasDefaultOnMatch;
+		std::string returnType;	// empty: Lexeme
+		std::string onEof;
+		bool hasOnEofCode;
+		std::string onUnknown;
+		bool hasOnUnknownCode;
 		std::map<std::string, std::string> contextName2contextFailure;
 
 		std::map<std::string, std::string>														name2expr;

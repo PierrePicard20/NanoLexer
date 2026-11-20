@@ -131,7 +131,7 @@ namespace NanoLexer
 
 	// class NanoLexer
 	LexerGenerator::LexerGenerator(const std::string& name, bool throwEarly_)
-		:lexemeCount{ 0 }, hasDefaultOnMatch{ false }, currentContext{ mainContextName , {} }, lexerName{ name }, throwEarly{ throwEarly_ }
+		:lexemeCount{ 0 }, hasDefaultOnMatch{ false }, hasOnEofCode{ false }, hasOnUnknownCode{ false }, currentContext{ mainContextName , {} }, lexerName{ name }, throwEarly{ throwEarly_ }
 	{
 		variables.emplace_back("$(LexerName)", name);
 		lexemeId = 1;
@@ -362,14 +362,36 @@ namespace NanoLexer
 			debugString += context->getDebugString(popIds);
 			lexemeCount += context->getLexemeCount();
 		}
+		// end of input and unknown text have their own cases: they never reach the default action
+		onMatch << "                case Lexeme::eof_:" << std::endl;
+		if (hasOnEofCode)
+		{
+			onMatch << "                    {" << onEof << "}" << std::endl;
+			onMatch << "                    break;" << std::endl;
+		}
+		else
+		{
+			if (!returnType.empty())
+				addErrorMessage("Missing end of input action (addOnEof()) with return type '" + returnType + "'");
+			onMatch << "                    return Lexeme::eof_;" << std::endl;
+		}
+		onMatch << "                case Lexeme::unknown_:" << std::endl;
+		if (hasOnUnknownCode)
+			onMatch << "                    {" << onUnknown << "}" << std::endl;
+		if (hasOnUnknownCode || !returnType.empty())
+			onMatch << "                    break;" << std::endl;	// the unknown text is skipped
+		else
+			onMatch << "                    return Lexeme::unknown_;" << std::endl;
 		onMatch << "                default:" << std::endl;
 		if (hasDefaultOnMatch)
 		{
 			onMatch << "                    {" << defaultOnMatch << "}" << std::endl;
 			onMatch << "                    break;" << std::endl;
 		}
-		else
+		else if (returnType.empty())
 			onMatch << "                    return accepted;" << std::endl;
+		else
+			onMatch << "                    break;" << std::endl;	// the lexeme is ignored
 
 		std::map<int, std::string>	id2OnMatchCode;
 		id = 1;
@@ -421,6 +443,7 @@ namespace NanoLexer
 		// user code last, so that it is not searched for the other placeholders
 		variables.emplace_back("$(Prologue)", prologue);
 		variables.emplace_back("$(Members)", members);
+		variables.emplace_back("$(ReturnType)", returnType.empty() ? "Lexeme" : returnType);
 
 		if (!errorMessages.empty())
 			throw NanoLexerException(errorMessages);
@@ -530,6 +553,33 @@ namespace NanoLexer
 	{
 		defaultOnMatch = code;
 		hasDefaultOnMatch = true;
+	}
+
+	void LexerGenerator::setReturnType(const std::string& type)
+	{
+		returnType = type;
+	}
+
+	void LexerGenerator::addOnEof(const std::string& code)
+	{
+		if (std::get<0>(currentContext) != mainContextName)
+		{
+			addErrorMessage("End of input action (addOnEof()) only allowed in the main context, not in context '" + std::get<0>(currentContext) + "'");
+			return;
+		}
+		onEof = code;
+		hasOnEofCode = true;
+	}
+
+	void LexerGenerator::addOnUnknown(const std::string& code)
+	{
+		if (std::get<0>(currentContext) != mainContextName)
+		{
+			addErrorMessage("Unknown text action (addOnUnknown()) only allowed in the main context, use addOnCurrentContextFailure() in context '" + std::get<0>(currentContext) + "'");
+			return;
+		}
+		onUnknown = code;
+		hasOnUnknownCode = true;
 	}
 
 	///////////////////////////////////////////////////////// private methods ////////////////////////////////////////////////////

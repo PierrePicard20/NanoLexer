@@ -228,6 +228,12 @@ namespace NanoLexer
 		std::string userCode;
 		int defaultLine = 0;
 		std::string defaultAction;
+		int typeLine = 0;
+		std::string returnType;
+		int eofLine = 0;
+		std::string eofAction;
+		int unknownLine = 0;
+		std::string unknownAction;
 
 		// actions may span several lines: they are scanned in the whole text, its lines joined by '\n'
 		auto lines = splitLines(text);
@@ -259,6 +265,27 @@ namespace NanoLexer
 				return false;
 			}
 			return true;
+		};
+
+		// Reads the action of 'what', a directive declared at most once ("%default", "<<EOF>>"...), expected after
+		// 'column' of line 'index'.
+		auto readUniqueAction = [&](std::size_t& index, std::size_t column, const std::string& what, int& declaredLine, std::string& code) {
+			auto number = lines[index].number;
+			const auto& line = lines[index].text;
+			auto brace = line.find_first_not_of(" \t", column);
+			std::string action;
+			if (brace == std::string::npos || line[brace] != '{')
+				errors.push_back({ number, what + " expects an action '{ ... }'" });
+			else if (readAction(index, brace, action))
+			{
+				if (declaredLine)
+					errors.push_back({ number, "duplicate " + what + ", already declared at line " + std::to_string(declaredLine) });
+				else
+				{
+					declaredLine = number;
+					code = action;
+				}
+			}
 		};
 
 		auto section = Section::definitions;
@@ -312,20 +339,17 @@ namespace NanoLexer
 					}
 				}
 				else if (section == Section::rules && directive == "%default")
+					readUniqueAction(index, directive.size(), directive, defaultLine, defaultAction);
+				else if (section == Section::rules && directive == "%type")
 				{
-					auto brace = line.find_first_not_of(" \t", directive.size());
-					std::string code;
-					if (brace == std::string::npos || line[brace] != '{')
-						errors.push_back({ number, "%default expects an action '{ ... }'" });
-					else if (readAction(index, brace, code))
+					if (typeLine)
+						errors.push_back({ number, "duplicate %type, already declared at line " + std::to_string(typeLine) });
+					else if (argument.empty())
+						errors.push_back({ number, "%type expects a type" });
+					else
 					{
-						if (defaultLine)
-							errors.push_back({ number, "duplicate %default, already declared at line " + std::to_string(defaultLine) });
-						else
-						{
-							defaultLine = number;
-							defaultAction = code;
-						}
+						returnType = argument;
+						typeLine = number;
 					}
 				}
 				else
@@ -343,6 +367,17 @@ namespace NanoLexer
 			else
 			{
 				auto end = patternEnd(line);
+				auto pattern = line.substr(0, end);
+				if (pattern == "<<EOF>>")
+				{
+					readUniqueAction(index, end, pattern, eofLine, eofAction);
+					continue;
+				}
+				if (pattern == "<<UNKNOWN>>")
+				{
+					readUniqueAction(index, end, pattern, unknownLine, unknownAction);
+					continue;
+				}
 				auto restStart = line.find_first_not_of(" \t", end);
 				Rule rule{ number, line.substr(0, end), false, "" };
 				if (restStart == std::string::npos)
@@ -361,6 +396,8 @@ namespace NanoLexer
 			errors.push_back({ 0, "missing '%%' between the definitions and rules sections" });
 		else if (rules.empty() && errors.empty())
 			errors.push_back({ 0, "no rule in the rules section" });
+		if (typeLine && !eofLine)
+			errors.push_back({ typeLine, "missing <<EOF>> action, required with %type to return a '" + returnType + "' at the end of the input" });
 		if (!isIdentifier(lexerName))
 			errors.push_back({ nameLine, "invalid lexer name '" + lexerName + "'" + (nameLine ? "" : ", use %name to set one") });
 
@@ -401,6 +438,23 @@ namespace NanoLexer
 
 		if (defaultLine)
 			generator->addDefaultMainContextOnMatch(defaultAction);
+		generator->setReturnType(returnType);
+		// the end of input and unknown text actions are only allowed in the main context: errors are located
+		auto addAction = [&](int line, void (LexerGenerator::*add)(const std::string&), const std::string& code) {
+			if (!line)
+				return;
+			try
+			{
+				(generator.get()->*add)(code);
+			}
+			catch (const NanoLexerException& e)
+			{
+				for (const auto& message : e.getMessages())
+					errors.push_back({ line, message });
+			}
+		};
+		addAction(eofLine, &LexerGenerator::addOnEof, eofAction);
+		addAction(unknownLine, &LexerGenerator::addOnUnknown, unknownAction);
 		generator->addPrologue(prologue);
 		if (userCode.find_first_not_of(" \t\n") != std::string::npos)
 			generator->addMembers(userCode);

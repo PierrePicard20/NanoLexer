@@ -79,3 +79,32 @@ TEST(ErrorTest, EmptyExpression2) {
     LexerGenerator lexGen("test", true);
     CHECK_NANOLEXEREXCEPTION(lexGen.addMacro("", "myExpression"), "Invalid empty expression");
 }
+
+TEST(ErrorTest, ReturnTypeWithoutEofAction) {
+    LexerGenerator lexGen("test", true);
+    lexGen.addExpression("hello", "hello");
+    lexGen.setReturnType("Token");
+    CHECK_NANOLEXEREXCEPTION(lexGen.generateLexer(), "Missing end of input action (addOnEof()) with return type 'Token'");
+}
+
+TEST(ErrorTest, ReturnTypeWithEofAction) {
+    LexerGenerator lexGen("test", true);
+    lexGen.addExpression("hello", "hello");
+    lexGen.setReturnType("Token");
+    lexGen.addOnEof("return Token();");
+    lexGen.generateLexer();
+}
+
+TEST(ErrorTest, EofActionOutsideMainContext) {
+    LexerGenerator lexGen("test", true);
+    lexGen.addExpression("hello", "hello");
+    lexGen.newContext("myContext");
+    CHECK_NANOLEXEREXCEPTION(lexGen.addOnEof("return Token();"), "End of input action (addOnEof()) only allowed in the main context, not in context 'myContext'");
+}
+
+TEST(ErrorTest, UnknownActionOutsideMainContext) {
+    LexerGenerator lexGen("test", true);
+    lexGen.addExpression("hello", "hello");
+    lexGen.newContext("myContext");
+    CHECK_NANOLEXEREXCEPTION(lexGen.addOnUnknown("return Token();"), "Unknown text action (addOnUnknown()) only allowed in the main context, use addOnCurrentContextFailure() in context 'myContext'");
+}
